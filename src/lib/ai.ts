@@ -1,8 +1,7 @@
-import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Couche d'abstraction IA (z-ai-web-dev-sdk, backend uniquement)
+// Couche d'abstraction IA (OpenRouter / API compatible OpenAI)
 // - Journalisation des appels (AIUsageLog)
 // - Délais d'attente, gestion des erreurs, réponses JSON structurées
 // - Opérations séparées : analyse, génération, évaluation, explication…
@@ -14,6 +13,7 @@ interface CompletionResult {
   ok: boolean;
   content: string;
   error?: string;
+  model?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -25,35 +25,87 @@ async function callModel(
   opts: { userId?: string; model?: string; timeoutMs?: number; temperature?: number } = {}
 ): Promise<CompletionResult> {
   const started = Date.now();
-  let promptChars = systemPrompt.length + userPrompt.length;
+  const promptChars = systemPrompt.length + userPrompt.length;
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    const errorMsg = "Clé d'API OpenRouter manquante (OPENROUTER_API_KEY). Veuillez la renseigner dans le fichier .env et dans Vercel.";
+    await log(op, opts.userId, opts.model, promptChars, 0, false, errorMsg, Date.now() - started);
+    return { ok: false, content: "", error: errorMsg };
+  }
+
+  const model = opts.model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
   try {
-    const zai = await ZAI.create();
-    const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const completion = await Promise.race([
-      zai.chat.completions.create({
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey.trim()}`,
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "StudyForge",
+      },
+      body: JSON.stringify({
+        model,
         messages: [
-          { role: "assistant", content: systemPrompt },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        thinking: { type: "disabled" },
+        temperature: opts.temperature ?? 0.3,
       }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Délai d'attente dépassé (${Math.round(timeout / 1000)} s)`)), timeout)),
-    ]);
-    const content = (completion as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) throw new Error("Réponse vide du modèle");
-    await log(op, opts.userId, opts.model, promptChars, content.length, true, undefined, Date.now() - started);
-    return { ok: true, content };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Erreur IA inconnue";
-    await log(op, opts.userId, opts.model, promptChars, 0, false, message, Date.now() - started).catch(() => {});
+      signal: AbortSignal.timeout(timeout),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      const errMsg = errBody?.error?.message || `Erreur API OpenRouter (${res.status} ${res.statusText})`;
+      throw new Error(errMsg);
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content ?? "";
+    if (!content.trim()) {
+      throw new Error("Réponse vide du modèle retournée par OpenRouter.");
+    }
+
+    const usedModel = data.model || model;
+    await log(op, opts.userId, usedModel, promptChars, content.length, true, undefined, Date.now() - started);
+    return { ok: true, content, model: usedModel };
+  } catch (err: any) {
+    const message =
+      err?.name === "TimeoutError"
+        ? `Délai d'attente dépassé (${Math.round(timeout / 1000)} s)`
+        : err instanceof Error
+        ? err.message
+        : "Erreur IA inconnue";
+    await log(op, opts.userId, model, promptChars, 0, false, message, Date.now() - started).catch(() => {});
     return { ok: false, content: "", error: message };
   }
 }
 
-async function log(op: AiOp, userId: string | undefined, model: string | undefined, promptChars: number, respChars: number, ok: boolean, error?: string, durationMs?: number) {
+async function log(
+  op: AiOp,
+  userId: string | undefined,
+  model: string | undefined,
+  promptChars: number,
+  respChars: number,
+  ok: boolean,
+  error?: string,
+  durationMs?: number
+) {
   try {
     await db.aIUsageLog.create({
-      data: { userId: userId ?? null, op, model: model ?? null, promptChars, respChars, ok, error: error ?? null, durationMs: durationMs ?? null },
+      data: {
+        userId: userId ?? null,
+        op,
+        model: model ?? null,
+        promptChars,
+        respChars,
+        ok,
+        error: error ?? null,
+        durationMs: durationMs ?? null,
+      },
     });
   } catch {
     /* journalisation best-effort */
@@ -83,7 +135,12 @@ export function parseJsonLoose<T>(raw: string): T | null {
 }
 
 export const ai = {
-  async complete(op: AiOp, systemPrompt: string, userPrompt: string, opts?: { userId?: string; model?: string; timeoutMs?: number }) {
+  async complete(
+    op: AiOp,
+    systemPrompt: string,
+    userPrompt: string,
+    opts?: { userId?: string; model?: string; timeoutMs?: number }
+  ) {
     return callModel(op, systemPrompt, userPrompt, opts);
   },
 
@@ -93,11 +150,11 @@ export const ai = {
     systemPrompt: string,
     userPrompt: string,
     opts?: { userId?: string; model?: string; timeoutMs?: number }
-  ): Promise<{ ok: boolean; data: T | null; error?: string; raw?: string }> {
+  ): Promise<{ ok: boolean; data: T | null; error?: string; raw?: string; model?: string }> {
     const first = await callModel(op, systemPrompt, userPrompt, opts);
-    if (!first.ok) return { ok: false, data: null, error: first.error };
+    if (!first.ok) return { ok: false, data: null, error: first.error, model: first.model };
     const parsed = parseJsonLoose<T>(first.content);
-    if (parsed) return { ok: true, data: parsed, raw: first.content };
+    if (parsed) return { ok: true, data: parsed, raw: first.content, model: first.model };
     // Réparation : on redemande uniquement le JSON
     const repair = await callModel(
       op,
@@ -107,8 +164,14 @@ export const ai = {
     );
     if (repair.ok) {
       const reparsed = parseJsonLoose<T>(repair.content);
-      if (reparsed) return { ok: true, data: reparsed, raw: first.content };
+      if (reparsed) return { ok: true, data: reparsed, raw: first.content, model: repair.model };
     }
-    return { ok: false, data: null, error: "Impossible d'obtenir une réponse JSON valide du modèle.", raw: first.content };
+    return {
+      ok: false,
+      data: null,
+      error: "Impossible d'obtenir une réponse JSON valide du modèle.",
+      raw: first.content,
+      model: first.model,
+    };
   },
 };

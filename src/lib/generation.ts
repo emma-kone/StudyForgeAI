@@ -70,7 +70,7 @@ ${content}
     evaluable: JSON.stringify(d.evaluable ?? []),
     relations: JSON.stringify(d.relations ?? []),
     raw: res.raw ?? null,
-    model: "glm-4.6",
+    model: res.model ?? "openrouter",
   };
   await db.documentAnalysis.upsert({
     where: { documentId },

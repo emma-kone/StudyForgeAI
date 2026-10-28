@@ -6,14 +6,12 @@ import { persist, createJSONStorage } from "zustand/middleware";
 // ─────────────────────────────────────────────────────────────────────────────
 // Store applicatif StudyForge AI
 // - État transitoire : authentification (revérifiée au démarrage)
-// - État d'interface PERSISTANT (localStorage) : vue active, navigation de la
-//   bibliothèque, filtres, brouillons d'import, configuration de génération,
-//   brouillons de réponses par session, code des éditeurs.
-//   → Un changement de vue ne réinitialise plus le travail en cours (§8 du cahier
-//   des charges) : les composants peuvent être démontés/remontés sans perte.
+// - État d'interface PERSISTANT (localStorage) : navigation de la bibliothèque,
+//   filtres, brouillons d'import, configuration de génération, brouillons de
+//   réponses par session, code des éditeurs.
+//   → Un changement de route ne réinitialise plus le travail en cours : les
+//   composants peuvent être démontés/remontés sans perte.
 // ─────────────────────────────────────────────────────────────────────────────
-
-export type View = "dashboard" | "library" | "generate" | "session" | "code" | "sql" | "progress" | "settings";
 
 export interface AppUser {
   id: string;
@@ -55,8 +53,6 @@ interface SessionDraftState {
 }
 
 interface PersistedUiState {
-  view: View;
-  activeSessionId: string | null;
   // Bibliothèque
   libraryMode: "hierarchy" | "documents";
   librarySubjectId: string | null;
@@ -87,9 +83,6 @@ interface AppState extends PersistedUiState {
 
   // Actions
   setAuthenticated: (ok: boolean, user?: AppUser | null) => void;
-  setView: (view: View) => void;
-  openSession: (sessionId: string) => void;
-  closeSession: () => void;
   resetAll: () => void;
 
   // Bibliothèque
@@ -141,8 +134,6 @@ const DEFAULT_IMPORT_DRAFT: ImportDraft = {
 };
 
 const INITIAL_PERSISTED: PersistedUiState = {
-  view: "dashboard",
-  activeSessionId: null,
   libraryMode: "hierarchy",
   librarySubjectId: null,
   libraryChapterId: null,
@@ -177,9 +168,6 @@ export const useAppStore = create<AppState>()(
       importFileHandles: [],
 
       setAuthenticated: (ok, user = null) => set({ authenticated: ok, user }),
-      setView: (view) => set({ view }),
-      openSession: (sessionId) => set({ view: "session", activeSessionId: sessionId }),
-      closeSession: () => set({ view: "dashboard", activeSessionId: null }),
       resetAll: () => set({ ...INITIAL_PERSISTED, authenticated: false, user: null, importFileHandles: [] }),
 
       // Bibliothèque
@@ -226,7 +214,15 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "studyforge-ui-v1",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persisted) => {
+        const raw = persisted as Record<string, unknown>;
+        const { view: _view, activeSessionId: _session, ...rest } = raw;
+        void _view;
+        void _session;
+        return rest as unknown as PersistedUiState;
+      },
       partialize: (state) => {
         const { authenticated: _a, user: _u, importFileHandles: _f, ...rest } = state;
         void _a;
