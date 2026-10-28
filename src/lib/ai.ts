@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Couche d'abstraction IA (OpenRouter / API compatible OpenAI)
-// - Journalisation des appels (AIUsageLog)
-// - Délais d'attente, gestion des erreurs, réponses JSON structurées
-// - Opérations séparées : analyse, génération, évaluation, explication…
+// Couche d'abstraction IA Hybride (Google Gemini + OpenRouter avec Fallback auto)
+// - Fournisseur principal par défaut : Google Gemini (gemini-3.8-flash, gratuit & performant)
+// - Fournisseur de secours : OpenRouter
+// - Bascule automatique transparente en cas de saturation / indisponibilité de l'un
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AiOp = "analysis" | "rag" | "generation" | "grading" | "explain" | "revision";
@@ -14,74 +14,187 @@ interface CompletionResult {
   content: string;
   error?: string;
   model?: string;
+  provider?: "gemini" | "openrouter";
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+// ── Appel direct Google Gemini ───────────────────────────────────────────────
+async function callGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { model?: string; timeoutMs?: number; temperature?: number; json?: boolean } = {}
+): Promise<{ ok: boolean; content: string; model: string; error?: string }> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { ok: false, content: "", model: "gemini", error: "GEMINI_API_KEY manquante." };
+  }
+
+  const model = opts.model || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+
+  const bodyPayload: Record<string, unknown> = {
+    contents: [{ parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: opts.temperature ?? 0.3,
+      ...(opts.json ? { responseMimeType: "application/json" } : {}),
+    },
+  };
+
+  if (systemPrompt.trim()) {
+    bodyPayload.systemInstruction = {
+      parts: [{ text: systemPrompt }],
+    };
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(bodyPayload),
+    signal: AbortSignal.timeout(timeout),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => null);
+    const msg = errData?.error?.message || `Erreur Gemini (${res.status} ${res.statusText})`;
+    return { ok: false, content: "", model, error: msg };
+  }
+
+  const data = await res.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  if (!content.trim()) {
+    return { ok: false, content: "", model, error: "Réponse vide de Gemini." };
+  }
+
+  return { ok: true, content, model };
+}
+
+// ── Appel OpenRouter ─────────────────────────────────────────────────────────
+async function callOpenRouter(
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { model?: string; timeoutMs?: number; temperature?: number } = {}
+): Promise<{ ok: boolean; content: string; model: string; error?: string }> {
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return { ok: false, content: "", model: "openrouter", error: "OPENROUTER_API_KEY manquante." };
+  }
+
+  const model = opts.model || process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
+  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const messages = [];
+  if (systemPrompt.trim()) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: userPrompt });
+
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey.trim()}`,
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      "X-Title": "StudyForge",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: opts.temperature ?? 0.3,
+    }),
+    signal: AbortSignal.timeout(timeout),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    const errMsg = errBody?.error?.message || `Erreur OpenRouter (${res.status} ${res.statusText})`;
+    return { ok: false, content: "", model, error: errMsg };
+  }
+
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content ?? "";
+  if (!content.trim()) {
+    return { ok: false, content: "", model, error: "Réponse vide d'OpenRouter." };
+  }
+
+  return { ok: true, content, model: data.model || model };
+}
+
+// ── Orchestrateur avec Fallback automatique ──────────────────────────────────
 async function callModel(
   op: AiOp,
   systemPrompt: string,
   userPrompt: string,
-  opts: { userId?: string; model?: string; timeoutMs?: number; temperature?: number } = {}
+  opts: { userId?: string; model?: string; timeoutMs?: number; temperature?: number; json?: boolean } = {}
 ): Promise<CompletionResult> {
   const started = Date.now();
   const promptChars = systemPrompt.length + userPrompt.length;
-  const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
 
-  if (!apiKey) {
-    const errorMsg = "Clé d'API OpenRouter manquante (OPENROUTER_API_KEY). Veuillez la renseigner dans le fichier .env et dans Vercel.";
-    await log(op, opts.userId, opts.model, promptChars, 0, false, errorMsg, Date.now() - started);
-    return { ok: false, content: "", error: errorMsg };
+  const preferredProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY);
+
+  let primary: "gemini" | "openrouter" = "gemini";
+  let fallback: "gemini" | "openrouter" | null = null;
+
+  if (preferredProvider === "openrouter" && hasOpenRouter) {
+    primary = "openrouter";
+    fallback = hasGemini ? "gemini" : null;
+  } else if (hasGemini) {
+    primary = "gemini";
+    fallback = hasOpenRouter ? "openrouter" : null;
+  } else if (hasOpenRouter) {
+    primary = "openrouter";
+    fallback = null;
+  } else {
+    const err = "Aucune clé d'API configurée (définissez GEMINI_API_KEY ou OPENROUTER_API_KEY).";
+    await log(op, opts.userId, "none", promptChars, 0, false, err, Date.now() - started);
+    return { ok: false, content: "", error: err };
   }
 
-  const model = opts.model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // 1. Essai avec le fournisseur principal
+  const primaryResult =
+    primary === "gemini"
+      ? await callGemini(systemPrompt, userPrompt, opts)
+      : await callOpenRouter(systemPrompt, userPrompt, opts);
 
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey.trim()}`,
-        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        "X-Title": "StudyForge",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: opts.temperature ?? 0.3,
-      }),
-      signal: AbortSignal.timeout(timeout),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => null);
-      const errMsg = errBody?.error?.message || `Erreur API OpenRouter (${res.status} ${res.statusText})`;
-      throw new Error(errMsg);
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) {
-      throw new Error("Réponse vide du modèle retournée par OpenRouter.");
-    }
-
-    const usedModel = data.model || model;
-    await log(op, opts.userId, usedModel, promptChars, content.length, true, undefined, Date.now() - started);
-    return { ok: true, content, model: usedModel };
-  } catch (err: any) {
-    const message =
-      err?.name === "TimeoutError"
-        ? `Délai d'attente dépassé (${Math.round(timeout / 1000)} s)`
-        : err instanceof Error
-        ? err.message
-        : "Erreur IA inconnue";
-    await log(op, opts.userId, model, promptChars, 0, false, message, Date.now() - started).catch(() => {});
-    return { ok: false, content: "", error: message };
+  if (primaryResult.ok) {
+    await log(op, opts.userId, `${primary}:${primaryResult.model}`, promptChars, primaryResult.content.length, true, undefined, Date.now() - started);
+    return { ok: true, content: primaryResult.content, model: primaryResult.model, provider: primary };
   }
+
+  console.warn(`[AI] Le fournisseur principal (${primary}) a échoué: ${primaryResult.error}`);
+
+  // 2. Si échec et qu'un fournisseur de secours est disponible, fallback automatique
+  if (fallback) {
+    console.warn(`[AI] Bascule automatique vers le secours (${fallback})...`);
+    const fallbackResult =
+      fallback === "gemini"
+        ? await callGemini(systemPrompt, userPrompt, opts)
+        : await callOpenRouter(systemPrompt, userPrompt, opts);
+
+    if (fallbackResult.ok) {
+      await log(
+        op,
+        opts.userId,
+        `${fallback}:${fallbackResult.model}`,
+        promptChars,
+        fallbackResult.content.length,
+        true,
+        undefined,
+        Date.now() - started
+      );
+      return { ok: true, content: fallbackResult.content, model: fallbackResult.model, provider: fallback };
+    }
+
+    const combinedError = `Échec de ${primary} (${primaryResult.error}) et du secours ${fallback} (${fallbackResult.error})`;
+    await log(op, opts.userId, "fallback-failed", promptChars, 0, false, combinedError, Date.now() - started);
+    return { ok: false, content: "", error: combinedError };
+  }
+
+  await log(op, opts.userId, `${primary}:${primaryResult.model}`, promptChars, 0, false, primaryResult.error, Date.now() - started);
+  return { ok: false, content: "", error: primaryResult.error };
 }
 
 async function log(
@@ -139,7 +252,7 @@ export const ai = {
     op: AiOp,
     systemPrompt: string,
     userPrompt: string,
-    opts?: { userId?: string; model?: string; timeoutMs?: number }
+    opts?: { userId?: string; model?: string; timeoutMs?: number; temperature?: number }
   ) {
     return callModel(op, systemPrompt, userPrompt, opts);
   },
@@ -149,22 +262,23 @@ export const ai = {
     op: AiOp,
     systemPrompt: string,
     userPrompt: string,
-    opts?: { userId?: string; model?: string; timeoutMs?: number }
-  ): Promise<{ ok: boolean; data: T | null; error?: string; raw?: string; model?: string }> {
-    const first = await callModel(op, systemPrompt, userPrompt, opts);
-    if (!first.ok) return { ok: false, data: null, error: first.error, model: first.model };
+    opts?: { userId?: string; model?: string; timeoutMs?: number; temperature?: number }
+  ): Promise<{ ok: boolean; data: T | null; error?: string; raw?: string; model?: string; provider?: string }> {
+    const first = await callModel(op, systemPrompt, userPrompt, { ...opts, json: true });
+    if (!first.ok) return { ok: false, data: null, error: first.error, model: first.model, provider: first.provider };
     const parsed = parseJsonLoose<T>(first.content);
-    if (parsed) return { ok: true, data: parsed, raw: first.content, model: first.model };
+    if (parsed) return { ok: true, data: parsed, raw: first.content, model: first.model, provider: first.provider };
+
     // Réparation : on redemande uniquement le JSON
     const repair = await callModel(
       op,
       "Tu corriges des sorties JSON. Réponds UNIQUEMENT avec le JSON valide, sans aucun texte autour, sans bloc de code.",
       `La réponse suivante devait être un JSON valide mais ne l'est pas. Répare-la et réponds UNIQUEMENT avec le JSON.\n\n${first.content.slice(0, 8000)}`,
-      { ...opts, timeoutMs: 60_000 }
+      { ...opts, timeoutMs: 60_000, json: true }
     );
     if (repair.ok) {
       const reparsed = parseJsonLoose<T>(repair.content);
-      if (reparsed) return { ok: true, data: reparsed, raw: first.content, model: repair.model };
+      if (reparsed) return { ok: true, data: reparsed, raw: first.content, model: repair.model, provider: repair.provider };
     }
     return {
       ok: false,
@@ -172,6 +286,7 @@ export const ai = {
       error: "Impossible d'obtenir une réponse JSON valide du modèle.",
       raw: first.content,
       model: first.model,
+      provider: first.provider,
     };
   },
 };
