@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Utilisateurs & réglages ───────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  settings        UserSettings?
+  subjects        Subject[]
+  documents       Document[]
+  exercises       Exercise[]
+  sessions        Session[]
+  conceptStats    ConceptStat[]
+  recommendations StudyRecommendation[]
+  aiLogs          AIUsageLog[]
+}
+
+model UserSettings {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  theme          String  @default("system") // light | dark | system
+  defaultMode    String  @default("apprentissage")
+  maxUploadMB    Int     @default(20)
+  hintsEnabled   Boolean @default(true)
+  aiModel        String  @default("glm-4.6")
+  exerciseLang   String  @default("fr")
+  retentionDays  Int     @default(0) // 0 = conservation illimitée
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── Organisation documentaire ───────────────────────────
+
+model Subject {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#8b5cf6")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapters  Chapter[]
+  documents Document[]
+  exercises Exercise[]
+  sessions  Session[]
+
+  @@index([userId])
+}
+
+model Chapter {
+  id          String   @id @default(cuid())
+  subjectId   String
+  name        String
+  description String?
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@index([subjectId])
+}
+
+model Document {
+  id            String   @id @default(cuid())
+  userId        String
+  subjectId     String?
+  chapterId     String?
+  name          String
+  originalName  String
+  type          String // pdf | docx | txt | md | pptx
+  size          Int
+  status        String   @default("PENDING") // PENDING | PROCESSING | READY | ERROR
+  extractedText String?
+  pageCount     Int?
+  meta          String? // JSON : sections, tableaux, code, avertissements
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   Subject?         @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  chapter   Chapter?         @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  chunks    DocumentChunk[]
+  analyses  DocumentAnalysis[]
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([status])
+}
+
+model DocumentChunk {
+  id         String @id @default(cuid())
+  documentId String
+  idx        Int
+  section    String? // titre de section / page d'origine
+  content    String
+  words      Int    @default(0)
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model DocumentAnalysis {
+  id           String   @id @default(cuid())
+  documentId   String   @unique
+  summary      String?
+  subjectGuess String?
+  chapters     String? // JSON
+  notions      String? // JSON
+  definitions  String? // JSON
+  methods      String? // JSON
+  formulas     String? // JSON
+  codeExcerpts String? // JSON
+  pitfalls     String? // JSON
+  prerequisites String? // JSON
+  evaluable    String? // JSON
+  relations    String? // JSON
+  raw          String? // JSON brut de l'IA
+  model        String?
+  createdAt    DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── Exercices & sessions ───────────────────────────
+
+model Exercise {
+  id        String   @id @default(cuid())
+  userId    String
+  subjectId String?
+  title     String
+  config    String // JSON : difficulté, types, thèmes, documents sources
+  questions String // JSON : tableau de questions typées
+  status    String   @default("READY") // READY | USED | ARCHIVED
+  createdAt DateTime @default(now())
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  items   SessionItem[]
+
+  @@index([userId])
+  @@index([subjectId])
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  userId      String
+  subjectId   String?
+  title       String    @default("Session d'exercices")
+  mode        String    @default("apprentissage") // apprentissage | entrainement | examen | revision | personnalise
+  status      String    @default("IN_PROGRESS") // IN_PROGRESS | SUBMITTED | GRADED
+  config      String? // JSON : configuration de génération
+  questions   String // JSON : questions au moment de la session (copie figée)
+  hintsUsed   Int       @default(0)
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  durationSec Int?
+  score       Float?
+  maxScore    Float?
+  percentage  Float?
+  summary     String? // JSON : compte rendu final
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject  Subject?      @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  items    SessionItem[]
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([status])
+}
+
+model SessionItem {
+  id           String  @id @default(cuid())
+  sessionId    String
+  exerciseId   String?
+  questionIdx  Int
+  maxPoints    Float   @default(1)
+  points       Float?
+  status       String  @default("PENDING") // PENDING | CORRECT | PARTIAL | INCORRECT | SKIPPED
+  graded       Boolean @default(false)
+  hintsUsed    Int     @default(0) // indices révélés pour CETTE question
+
+  session   Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise  Exercise? @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+  answers   Answer[]
+
+  @@index([sessionId])
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  itemId      String
+  value       String // JSON : réponse de l'utilisateur
+  feedback    String? // JSON : correction détaillée (critères, explication, sources)
+  gradedBy    String? // rule | ai | mixed
+  attempts    Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  item SessionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+}
+
+// ─────────────────────────── Suivi des notions & révision ───────────────────────────
+
+model ConceptStat {
+  id        String   @id @default(cuid())
+  userId    String
+  notion    String
+  attempts  Int      @default(0)
+  correct   Int      @default(0)
+  partial   Int      @default(0)
+  mastery   Float    @default(0) // 0..1
+  lastSeen  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notion])
+  @@index([userId])
+}
+
+model StudyRecommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  notion    String
+  reason    String
+  priority  Float    @default(0.5)
+  status    String   @default("OPEN") // OPEN | ACCEPTED | DISMISSED
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Exécution de code & SQL ───────────────────────────
+
+model ProgramRun {
+  id         String   @id @default(cuid())
+  userId     String
+  sessionId  String?
+  language   String
+  code       String
+  stdout     String?
+  stderr     String?
+  exitCode   Int?
+  durationMs Int?
+  ok         Boolean  @default(false)
+  limited    String? // raison de la limitation éventuelle
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SqlQueryLog {
+  id         String   @id @default(cuid())
+  userId     String
+  sessionId  String?
+  sql        String
+  ok         Boolean  @default(false)
+  rowCount   Int?
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Chat documentaire ───────────────────────────
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  documentId String
+  role       String // user | assistant
+  content    String
+  sources    String? // JSON : [{ document, section }]
+  createdAt  DateTime @default(now())
+
+  @@index([userId, documentId, createdAt])
+}
+
+// ─────────────────────────── Journalisation IA ───────────────────────────
+
+model AIUsageLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  op           String // analysis | rag | generation | grading | explain | revision
+  model        String?
+  promptChars  Int?
+  respChars    Int?
+  ok           Boolean  @default(true)
+  error        String?
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([op])
+}

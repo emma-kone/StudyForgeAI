@@ -1,0 +1,702 @@
+    40→    40→import { Checkbox } from "@/components/ui/checkbox";
+    41→    41→import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+    42→    42→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    43→    43→import { Progress } from "@/components/ui/progress";
+    44→    44→import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+    45→    45→import { Separator } from "@/components/ui/separator";
+    46→    46→import { Skeleton } from "@/components/ui/skeleton";
+    47→    47→import {
+    48→    48→  AlertDialog,
+    49→    49→  AlertDialogAction,
+    50→    50→  AlertDialogCancel,
+    51→    51→  AlertDialogContent,
+    52→    52→  AlertDialogDescription,
+    53→    53→  AlertDialogFooter,
+    54→    54→  AlertDialogHeader,
+    55→    55→  AlertDialogTitle,
+    56→    56→  AlertDialogTrigger,
+    57→    57→} from "@/components/ui/alert-dialog";
+    58→    58→import {
+    59→    59→  AlertCircle,
+    60→    60→  ArrowLeft,
+    61→    61→  ArrowRight,
+    62→    62→  CheckCircle2,
+    63→    63→  FileText,
+    64→    64→  Info,
+    65→    65→  Lightbulb,
+    66→    66→  ListChecks,
+    67→    67→  Loader2,
+    68→    68→  MinusCircle,
+    69→    69→  Play,
+    70→    70→  Send,
+    71→    71→  XCircle,
+    72→    72→} from "lucide-react";
+    73→    73→
+    74→    74→// ── Types de l'API ───────────────────────────────────────────────────────────
+    75→    75→
+    76→    76→interface SessionConfig {
+    77→    77→  hintsEnabled?: boolean;
+    78→    78→  correctionTiming?: "immediate" | "end";
+    79→    79→  durationMin?: number;
+    80→    80→  difficulty?: string;
+    81→    81→  documentIds?: string[];
+    82→    82→}
+    83→    83→
+    84→    84→interface ItemState {
+    85→    85→  id: string;
+    86→    86→  questionIdx: number;
+    87→    87→  maxPoints: number;
+    88→    88→  points: number | null;
+    89→    89→  status: string;
+    90→    90→  graded: boolean;
+    91→    91→  lastAnswer: unknown;
+    92→    92→  feedback: CorrectionFeedback | null;
+    93→    93→}
+    94→    94→
+    95→    95→interface SessionData {
+    96→    96→  session: {
+    97→    97→    id: string;
+    98→    98→    title: string;
+    99→    99→    mode: SessionMode;
+   100→   100→    status: string;
+   101→   101→    config: SessionConfig | null;
+   102→   102→    startedAt: string;
+   103→   103→    finishedAt: string | null;
+   104→   104→    durationSec: number | null;
+   105→   105→    score: number | null;
+   106→   106→    maxScore: number | null;
+   107→   107→    percentage: number | null;
+   108→   108→    summary: SessionSummary | null;
+   109→   109→    hintsUsed: number;
+   110→   110→  };
+   111→   111→  questions: Question[];
+   112→   112→  items: ItemState[];
+   113→   113→}
+   114→   114→
+   115→   115→interface ExecResponse {
+   116→   116→  ok: boolean;
+   117→   117→  stdout: string;
+   118→   118→  stderr: string;
+   119→   119→  exitCode: number | null;
+   120→   120→  durationMs: number;
+   121→   121→  timedOut: boolean;
+   122→   122→  note?: string;
+   123→   123→}
+   124→   124→
+   125→   125→interface SqlStatementResult {
+   126→   126→  sql: string;
+   127→   127→  kind: string;
+   128→   128→  rows?: Record<string, unknown>[];
+   129→   129→  columns?: string[];
+   130→   130→  error?: string;
+   131→   131→  changes?: number;
+   132→   132→}
+   133→   133→
+   134→   134→interface SqlRunResponse {
+   135→   135→  ok: boolean;
+   136→   136→  statements: SqlStatementResult[];
+   137→   137→  error?: string;
+   138→   138→  durationMs: number;
+   139→   139→}
+   140→   140→
+   141→   141→interface SessionViewProps {
+   142→   142→  sessionId: string;
+   143→   143→  onExit: () => void;
+   144→   144→}
+   145→   145→
+   146→   146→// ── Utilitaires ──────────────────────────────────────────────────────────────
+   147→   147→
+   148→   148→function hashStr(s: string): number {
+   149→   149→  let h = 2166136261;
+   150→   150→  for (let i = 0; i < s.length; i++) {
+   151→   151→    h ^= s.charCodeAt(i);
+   152→   152→    h = Math.imul(h, 16777619);
+   153→   153→  }
+   154→   154→  return h >>> 0;
+   155→   155→}
+   156→   156→
+   157→   157→/** Mélange déterministe (même graine → même ordre, stable entre rendus). */
+   158→   158→function seedShuffle<T>(arr: T[], seed: number): T[] {
+   159→   159→  const copy = [...arr];
+   160→   160→  let state = seed || 1;
+   161→   161→  const rand = () => {
+   162→   162→    state |= 0;
+   163→   163→    state = (state + 0x6d2b79f5) | 0;
+   164→   164→    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+   165→   165→    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+   166→   166→    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+   167→   167→  };
+   168→   168→  for (let i = copy.length - 1; i > 0; i--) {
+   169→   169→    const j = Math.floor(rand() * (i + 1));
+   170→   170→    [copy[i], copy[j]] = [copy[j], copy[i]];
+   171→   171→  }
+   172→   172→  return copy;
+   173→   173→}
+   174→   174→
+   175→   175→function langExtension(language?: string): Extension | null {
+   176→   176→  switch ((language ?? "").toLowerCase()) {
+   177→   177→    case "javascript":
+   178→   178→    case "js":
+   179→   179→      return javascript();
+   180→   180→    case "typescript":
+   181→   181→    case "ts":
+   182→   182→      return javascript({ typescript: true });
+   183→   183→    case "python":
+   184→   184→    case "py":
+   185→   185→      return python();
+   186→   186→    case "java":
+   187→   187→      return java();
+   188→   188→    case "c":
+   189→   189→    case "cpp":
+   190→   190→    case "c++":
+   191→   191→    case "csharp":
+   192→   192→      return cpp();
+   193→   193→    case "sql":
+   194→   194→      return sqlLang();
+   195→   195→    default:
+   196→   196→      return null;
+   197→   197→  }
+   198→   198→}
+   199→   199→
+   200→   200→function useIsDark(): boolean {
+   201→   201→  const [isDark, setIsDark] = useState(false);
+   202→   202→  useEffect(() => {
+   203→   203→    const root = document.documentElement;
+   204→   204→    const update = () => setIsDark(root.classList.contains("dark"));
+   205→   205→    update();
+   206→   206→    const observer = new MutationObserver(update);
+   207→   207→    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+   208→   208→    return () => observer.disconnect();
+   209→   209→  }, []);
+   210→   210→  return isDark;
+   211→   211→}
+   212→   212→
+   213→   213→function defaultDraft(q: Question): unknown {
+   214→   214→  switch (q.type) {
+   215→   215→    case "qcm_multiple":
+   216→   216→      return [];
+   217→   217→    case "fill_blank":
+   218→   218→      return (q.blanks ?? []).map(() => "");
+   219→   219→    case "matching":
+   220→   220→      return {} as Record<string, string>;
+   221→   221→    case "ordering":
+   222→   222→      return undefined; // géré par OrderedListInput (mélange déterministe)
+   223→   223→    case "error_identification":
+   224→   224→      return { line: "", explanation: "" };
+   225→   225→    case "code_output":
+   226→   226→      return "";
+   227→   227→    case "code_write":
+   228→   228→    case "code_fix":
+   229→   229→    case "debug":
+   230→   230→      return q.starterCode ?? "";
+   231→   231→    case "sql_query":
+   232→   232→    case "sql_create_table":
+   233→   233→    case "sql_database":
+   234→   234→      return q.starterCode ?? "";
+   235→   235→    default:
+   236→   236→      return "";
+   237→   237→  }
+   238→   238→}
+   239→   239→
+   240→   240→function hasAnswer(q: Question, draft: unknown): boolean {
+   241→   241→  if (draft == null) return false;
+   242→   242→  switch (q.type) {
+   243→   243→    case "qcm_single":
+   244→   244→      return typeof draft === "string" && draft.length > 0;
+   245→   245→    case "qcm_multiple":
+   246→   246→      return Array.isArray(draft) && draft.length > 0;
+   247→   247→    case "true_false":
+   248→   248→      return draft === "true" || draft === "false";
+   249→   249→    case "fill_blank":
+   250→   250→      return Array.isArray(draft) && draft.some((v) => String(v ?? "").trim() !== "");
+   251→   251→    case "matching":
+   252→   252→      return typeof draft === "object" && Object.values(draft as Record<string, string>).some((v) => v);
+   253→   253→    case "ordering":
+   254→   254→      return Array.isArray(draft) && draft.length > 0;
+   255→   255→    case "error_identification":
+   256→   256→      return typeof draft === "object" && String((draft as { line?: string }).line ?? "").trim() !== "";
+   257→   257→    case "open_question":
+   258→   258→    case "case_study":
+   259→   259→    case "data_modeling":
+   260→   260→    case "combined":
+   261→   261→    case "exam_composite":
+   262→   262→    case "short_answer":
+   263→   263→    case "code_output":
+   264→   264→      return typeof draft === "string" && draft.trim().length > 0;
+   265→   265→    case "code_write":
+   266→   266→    case "code_fix":
+   267→   267→    case "debug":
+   268→   268→    case "sql_query":
+   269→   269→    case "sql_create_table":
+   270→   270→    case "sql_database":
+   271→   271→      return typeof draft === "string" && draft.trim().length > 0;
+   272→   272→    default:
+   273→   273→      return String(draft).trim().length > 0;
+   274→   274→  }
+   275→   275→}
+   276→   276→
+   277→   277→const VERDICT_BADGE: Record<string, { label: string; className: string }> = {
+   278→   278→  correct: { label: "Correcte", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" },
+   279→   279→  partial: { label: "Partiellement correcte", className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200" },
+   280→   280→  incorrect: { label: "Incorrecte", className: "bg-destructive text-destructive-foreground" },
+   281→   281→  skipped: { label: "Sans réponse", className: "bg-muted text-muted-foreground" },
+   282→   282→};
+   283→   283→
+   284→   284→// ── Panneau de correction détaillée ──────────────────────────────────────────
+   285→   285→
+   286→   286→function FeedbackPanel({
+   287→   287→  question,
+   288→   288→  maxPoints,
+   289→   289→  feedback,
+   290→   290→}: {
+   291→   291→  question: Question;
+   292→   292→  maxPoints: number;
+   293→   293→  feedback: CorrectionFeedback;
+   294→   294→}) {
+   295→   295→  const verdict = VERDICT_BADGE[feedback.verdict] ?? VERDICT_BADGE.skipped;
+   296→   296→  const mono =
+   297→   297→    CODE_TYPES.includes(question.type) || SQL_TYPES.includes(question.type) || question.type === "code_output";
+   298→   298→  return (
+   299→   299→    <div className="space-y-3 rounded-lg border bg-muted/30 p-4" aria-live="polite">
+   300→   300→      <div className="flex flex-wrap items-center gap-2">
+   301→   301→        <Badge className={verdict.className}>{verdict.label}</Badge>
+   302→   302→        <span className="tnum text-sm font-semibold">
+   303→   303→          {feedback.points} / {maxPoints} pt(s)
+   304→   304→        </span>
+   305→   305→        {feedback.uncertain && (
+   306→   306→          <Badge variant="outline" className="gap-1">
+   307→   307→            <AlertCircle className="h-3 w-3" aria-hidden /> Correction incertaine
+   308→   308→          </Badge>
+   309→   309→        )}
+   310→   310→      </div>
+   311→   311→
+   312→   312→      <p className="whitespace-pre-wrap text-sm leading-relaxed">{feedback.explanation}</p>
+   313→   313→
+   314→   314→      {feedback.criteria && feedback.criteria.length > 0 && (
+   315→   315→        <div className="space-y-1.5">
+   316→   316→          <p className="typo-meta font-medium uppercase tracking-wide">Grille d&apos;évaluation</p>
+   317→   317→          {feedback.criteria.map((c, i) => (
+   318→   318→            <div key={i} className="rounded-md border bg-background p-2.5">
+   319→   319→              <div className="flex items-center justify-between gap-3">
+   320→   320→                <span className="text-sm font-medium">{c.criterion}</span>
+   321→   321→                <span className="tnum text-sm font-semibold">
+   322→   322→                  {c.awarded} / {c.max}
+   323→   323→                </span>
+   324→   324→              </div>
+   325→   325→              {c.comment && <p className="typo-meta mt-1">{c.comment}</p>}
+   326→   326→            </div>
+   327→   327→          ))}
+   328→   328→        </div>
+   329→   329→      )}
+   330→   330→
+   331→   331→      {feedback.expectedAnswer && (
+   332→   332→        <div className="space-y-1">
+   333→   333→          <p className="typo-meta font-medium uppercase tracking-wide">Réponse attendue</p>
+   334→   334→          {mono ? (
+   335→   335→            <pre className="font-code max-h-48 overflow-auto rounded-md border bg-background p-3 text-xs leading-relaxed">
+   336→   336→              {feedback.expectedAnswer}
+   337→   337→            </pre>
+   338→   338→          ) : (
+   339→   339→            <p className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm">{feedback.expectedAnswer}</p>
+   340→   340→          )}
+   341→   341→        </div>
+   342→   342→      )}
+   343→   343→
+   344→   344→      {feedback.sources && feedback.sources.length > 0 && (
+   345→   345→        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+   346→   346→          {feedback.sources.map((s, i) => (
+   347→   347→            <span key={i} className="typo-meta inline-flex items-center gap-1">
+   348→   348→              <FileText className="h-3 w-3" aria-hidden />
+   349→   349→              {s.document}
+   350→   350→              {s.section ? ` — ${s.section}` : ""}
+   351→   351→            </span>
+   352→   352→          ))}
+   353→   353→        </div>
+   354→   354→      )}
+   355→   355→    </div>
+   356→   356→  );
+   357→   357→}
+   358→   358→
+   359→   359→// ── Saisies par type de question ─────────────────────────────────────────────
+   360→   360→
+   361→   361→function QcmSingleInput({ q, value, onChange }: { q: Question; value: unknown; onChange: (v: string) => void }) {
+   362→   362→  const selected = typeof value === "string" ? value : "";
+   363→   363→  return (
+   364→   364→    <RadioGroup value={selected} onValueChange={onChange} className="gap-2" aria-label="Options de réponse">
+   365→   365→      {(q.options ?? []).map((o) => (
+   366→   366→        <Label
+   367→   367→          key={o.id}
+   368→   368→          htmlFor={`opt-${o.id}`}
+   369→   369→          className={cn(
+   370→   370→            "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm font-normal transition-colors hover:bg-muted/60",
+   371→   371→            selected === o.id && "border-primary bg-primary/5"
+   372→   372→          )}
+   373→   373→        >
+   374→   374→          <RadioGroupItem id={`opt-${o.id}`} value={o.id} className="mt-0.5" />
+   375→   375→          <span>{o.label}</span>
+   376→   376→        </Label>
+   377→   377→      ))}
+   378→   378→    </RadioGroup>
+   379→   379→  );
+   380→   380→}
+   381→   381→
+   382→   382→function QcmMultipleInput({ q, value, onChange }: { q: Question; value: unknown; onChange: (v: string[]) => void }) {
+   383→   383→  const picked = Array.isArray(value) ? (value as string[]) : [];
+   384→   384→  const toggle = (id: string) => onChange(picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id]);
+   385→   385→  return (
+   386→   386→    <div className="space-y-2" role="group" aria-label="Options de réponse (plusieurs choix possibles)">
+   387→   387→      {(q.options ?? []).map((o) => (
+   388→   388→        <Label
+   389→   389→          key={o.id}
+   390→   390→          htmlFor={`opt-${o.id}`}
+   391→   391→          className={cn(
+   392→   392→            "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm font-normal transition-colors hover:bg-muted/60",
+   393→   393→            picked.includes(o.id) && "border-primary bg-primary/5"
+   394→   394→          )}
+   395→   395→        >
+   396→   396→          <Checkbox id={`opt-${o.id}`} checked={picked.includes(o.id)} onCheckedChange={() => toggle(o.id)} className="mt-0.5" />
+   397→   397→          <span>{o.label}</span>
+   398→   398→        </Label>
+   399→   399→      ))}
+   400→   400→      <p className="typo-meta">Plusieurs réponses possibles — les réponses erronées retirent des points.</p>
+   401→   401→    </div>
+   402→   402→  );
+   403→   403→}
+   404→   404→
+   405→   405→function TrueFalseInput({ value, onChange }: { value: unknown; onChange: (v: string) => void }) {
+   406→   406→  return (
+   407→   407→    <div className="flex gap-3" role="group" aria-label="Réponse vrai ou faux">
+   408→   408→      <Button
+   409→   409→        type="button"
+   410→   410→        variant={value === "true" ? "default" : "outline"}
+   411→   411→        onClick={() => onChange("true")}
+   412→   412→        className="h-12 flex-1 gap-2 font-semibold"
+   413→   413→        aria-pressed={value === "true"}
+   414→   414→      >
+   415→   415→        <CheckCircle2 className="h-4 w-4" aria-hidden /> Vrai
+   416→   416→      </Button>
+   417→   417→      <Button
+   418→   418→        type="button"
+   419→   419→        variant={value === "false" ? "default" : "outline"}
+   420→   420→        onClick={() => onChange("false")}
+   421→   421→        className="h-12 flex-1 gap-2 font-semibold"
+   422→   422→        aria-pressed={value === "false"}
+   423→   423→      >
+   424→   424→        <XCircle className="h-4 w-4" aria-hidden /> Faux
+   425→   425→      </Button>
+   426→   426→    </div>
+   427→   427→  );
+   428→   428→}
+   429→   429→
+   430→   430→function FillBlankInput({ q, value, onChange }: { q: Question; value: unknown; onChange: (v: string[]) => void }) {
+   431→   431→  const answers = Array.isArray(value) ? (value as string[]) : [];
+   432→   432→  const blanks = q.blanks ?? [];
+   433→   433→  const segments = q.segments ?? [];
+   434→   434→  const set = (i: number, v: string) => {
+   435→   435→    const next = [...answers];
+   436→   436→    while (next.length < blanks.length) next.push("");
+   437→   437→    next[i] = v;
+   438→   438→    onChange(next);
+   439→   439→  };
+   440→   440→  return (
+   441→   441→    <div className="space-y-3">
+   442→   442→      <div className="flex flex-wrap items-center gap-2 text-sm leading-loose">
+   443→   443→        {segments.map((seg, i) => (
+   444→   444→          <span key={i} className="contents">
+   445→   445→            <span className="whitespace-pre-wrap">{seg}</span>
+   446→   446→            {i < blanks.length && (
+   447→   447→              <Input
+   448→   448→                value={answers[i] ?? ""}
+   449→   449→                onChange={(e) => set(i, e.target.value)}
+   450→   450→                className="inline-block w-40 font-medium"
+   451→   451→                aria-label={`Trou ${i + 1}`}
+   452→   452→                autoComplete="off"
+   453→   453→              />
+   454→   454→            )}
+   455→   455→          </span>
+   456→   456→        ))}
+   457→   457→      </div>
+   458→   458→      {blanks.length > segments.length - 1 && (
+   459→   459→        <div className="space-y-2">
+   460→   460→          {blanks.slice(Math.max(0, segments.length - 1)).map((_, j) => {
+   461→   461→            const idx = Math.max(0, segments.length - 1) + j;
+   462→   462→            return (
+   463→   463→              <Input
+   464→   464→                key={idx}
+   465→   465→                value={answers[idx] ?? ""}
+   466→   466→                onChange={(e) => set(idx, e.target.value)}
+   467→   467→                placeholder={`Réponse ${idx + 1}`}
+   468→   468→                aria-label={`Trou ${idx + 1}`}
+   469→   469→                autoComplete="off"
+   470→   470→              />
+   471→   471→            );
+   472→   472→          })}
+   473→   473→        </div>
+   474→   474→      )}
+   475→   475→      <p className="typo-meta">{blanks.length} trou(s) à compléter. Les variantes orthographiques raisonnables sont acceptées.</p>
+   476→   476→    </div>
+   477→   477→  );
+   478→   478→}
+   479→   479→
+   480→   480→function MatchingInput({
+   481→   481→  q,
+   482→   482→  value,
+   483→   483→  onChange,
+   484→   484→}: {
+   485→   485→  q: Question;
+   486→   486→  value: unknown;
+   487→   487→  onChange: (v: Record<string, string>) => void;
+   488→   488→}) {
+   489→   489→  const pairs = q.pairs ?? [];
+   490→   490→  const rights = useMemo(() => seedShuffle(pairs.map((p) => p.right), hashStr(q.statement) || 7), [pairs, q.statement]);
+   491→   491→  const current = (typeof value === "object" && value !== null ? value : {}) as Record<string, string>;
+   492→   492→  return (
+   493→   493→    <div className="space-y-3">
+   494→   494→      {pairs.map((p, i) => (
+   495→   495→        <div key={i} className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+   496→   496→          <span className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">{p.left}</span>
+   497→   497→          <ArrowRight className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden />
+   498→   498→          <Select value={current[p.left] ?? ""} onValueChange={(v) => onChange({ ...current, [p.left]: v })}>
+   499→   499→            <SelectTrigger className="w-full sm:w-64" aria-label={`Association pour ${p.left}`}>
+   500→   500→              <SelectValue placeholder="Choisir la définition…" />
+   501→   501→            </SelectTrigger>
+   502→   502→            <SelectContent>
+   503→   503→              {rights.map((r, j) => (
+   504→   504→                <SelectItem key={`${r}-${j}`} value={r}>
+   505→   505→                  {r}
+   506→   506→                </SelectItem>
+   507→   507→              ))}
+   508→   508→            </SelectContent>
+   509→   509→          </Select>
+   510→   510→        </div>
+   511→   511→      ))}
+   512→   512→      <p className="typo-meta">Associez chaque notion à la bonne définition.</p>
+   513→   513→    </div>
+   514→   514→  );
+   515→   515→}
+   516→   516→
+   517→   517→function OrderedListInput({
+   518→   518→  q,
+   519→   519→  value,
+   520→   520→  onChange,
+   521→   521→}: {
+   522→   522→  q: Question;
+   523→   523→  value: unknown;
+   524→   524→  onChange: (v: string[]) => void;
+   525→   525→}) {
+   526→   526→  const items = useMemo(
+   527→   527→    () => seedShuffle(q.orderedItems ?? [], hashStr(q.statement) || 11),
+   528→   528→    [q.orderedItems, q.statement]
+   529→   529→  );
+   530→   530→  const list = Array.isArray(value) && value.length > 0 ? (value as string[]) : items;
+   531→   531→  const move = (i: number, dir: -1 | 1) => {
+   532→   532→    const next = [...list];
+   533→   533→    const j = i + dir;
+   534→   534→    if (j < 0 || j >= next.length) return;
+   535→   535→    [next[i], next[j]] = [next[j], next[i]];
+   536→   536→    onChange(next);
+   537→   537→  };
+   538→   538→  return (
+   539→   539→    <div className="space-y-2">
+   540→   540→      {list.map((item, i) => (
+   541→   541→        <div key={`${item}-${i}`} className="flex items-center gap-2 rounded-lg border p-2.5">
+   542→   542→          <span className="tnum flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+   543→   543→            {i + 1}
+   544→   544→          </span>
+   545→   545→          <span className="flex-1 text-sm">{item}</span>
+   546→   546→          <div className="flex shrink-0 gap-1">
+   547→   547→            <Button type="button" variant="ghost" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Monter « ${item} »`}>
+   548→   548→              ↑
+   549→   549→            </Button>
+   550→   550→            <Button type="button" variant="ghost" size="sm" onClick={() => move(i, 1)} disabled={i === list.length - 1} aria-label={`Descendre « ${item} »`}>
+   551→   551→              ↓
+   552→   552→            </Button>
+   553→   553→          </div>
+   554→   554→        </div>
+   555→   555→      ))}
+   556→   556→      <p className="typo-meta">Remettez les étapes dans le bon ordre avec les flèches.</p>
+   557→   557→    </div>
+   558→   558→  );
+   559→   559→}
+   560→   560→
+   561→   561→function ErrorIdentificationInput({
+   562→   562→  q,
+   563→   563→  value,
+   564→   564→  onChange,
+   565→   565→}: {
+   566→   566→  q: Question;
+   567→   567→  value: unknown;
+   568→   568→  onChange: (v: { line: string; explanation: string }) => void;
+   569→   569→}) {
+   570→   570→  const current = (typeof value === "object" && value !== null ? value : { line: "", explanation: "" }) as {
+   571→   571→    line: string;
+   572→   572→    explanation: string;
+   573→   573→  };
+   574→   574→  const lines = (q.buggyCode ?? "").split("\n");
+   575→   575→  return (
+   576→   576→    <div className="space-y-4">
+   577→   577→      <pre className="font-code max-h-72 overflow-auto rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+   578→   578→        {lines.map((l, i) => (
+   579→   579→          <div key={i} className={cn("flex gap-3", Number(current.line) === i + 1 && "rounded bg-amber-100 dark:bg-amber-950")}>
+   580→   580→            <span className="tnum inline-block w-8 shrink-0 select-none text-right text-muted-foreground">{i + 1}</span>
+   581→   581→            <span className="whitespace-pre-wrap">{l || " "}</span>
+   582→   582→          </div>
+   583→   583→        ))}
+   584→   584→      </pre>
+   585→   585→      <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
+   586→   586→        <div className="space-y-1.5">
+   587→   587→          <Label htmlFor="error-line">Numéro de ligne</Label>
+   588→   588→          <Input
+   589→   589→            id="error-line"
+   590→   590→            type="number"
+   591→   591→            min={1}
+   592→   592→            value={current.line}
+   593→   593→            onChange={(e) => onChange({ ...current, line: e.target.value })}
+   594→   594→            placeholder="ex. 3"
+   595→   595→          />
+   596→   596→        </div>
+   597→   597→        <div className="space-y-1.5">
+   598→   598→          <Label htmlFor="error-explanation">Explication de l&apos;erreur</Label>
+   599→   599→          <Textarea
+   600→   600→            id="error-explanation"
+   601→   601→            rows={3}
+   602→   602→            value={current.explanation}
+   603→   603→            onChange={(e) => onChange({ ...current, explanation: e.target.value })}
+   604→   604→            placeholder="Décrivez la nature de l'erreur et comment la corriger…"
+   605→   605→          />
+   606→   606→        </div>
+   607→   607→      </div>
+   608→   608→    </div>
+   609→   609→  );
+   610→   610→}
+   611→   611→
+   612→   612→function CodeMirrorField({
+   613→   613→  value,
+   614→   614→  language,
+   615→   615→  isSql,
+   616→   616→  onChange,
+   617→   617→}: {
+   618→   618→  value: string;
+   619→   619→  language?: string;
+   620→   620→  isSql: boolean;
+   621→   621→  onChange: (v: string) => void;
+   622→   622→}) {
+   623→   623→  const isDark = useIsDark();
+   624→   624→  const ext = isSql ? sqlLang() : langExtension(language);
+   625→   625→  return (
+   626→   626→    <div className="overflow-hidden rounded-md border" aria-label="Éditeur de code">
+   627→   627→      <CodeMirror
+   628→   628→        value={value}
+   629→   629→        theme={isDark ? oneDark : "light"}
+   630→   630→        extensions={ext ? [ext] : []}
+   631→   631→        onChange={onChange}
+   632→   632→        basicSetup={{ foldGutter: false, highlightActiveLine: true }}
+   633→   633→        className="text-[13.5px]"
+   634→   634→        minHeight="220px"
+   635→   635→      />
+   636→   636→    </div>
+   637→   637→  );
+   638→   638→}
+   639→   639→
+   640→   640→// ── Vue principale ───────────────────────────────────────────────────────────
+   641→   641→
+   642→   642→export default function SessionView({ sessionId, onExit }: SessionViewProps) {
+   643→   643→  const { toast } = useToast();
+   644→   644→  const [data, setData] = useState<SessionData | null>(null);
+   645→   645→  const [loading, setLoading] = useState(true);
+   646→   646→  const [error, setError] = useState<string | null>(null);
+   647→   647→  const [current, setCurrent] = useState(0);
+   648→   648→  const [drafts, setDrafts] = useState<Record<number, unknown>>({});
+   649→   649→  const [feedbacks, setFeedbacks] = useState<Record<number, CorrectionFeedback>>({});
+   650→   650→  const [hints, setHints] = useState<Record<number, string[]>>({});
+   651→   651→  const [hintRemaining, setHintRemaining] = useState<Record<number, number>>({});
+   652→   652→  const [saving, setSaving] = useState(false);
+   653→   653→  const [executing, setExecuting] = useState(false);
+   654→   654→  const [execResult, setExecResult] = useState<ExecResponse | null>(null);
+   655→   655→  const [sqlResult, setSqlResult] = useState<SqlRunResponse | null>(null);
+   656→   656→  const [submitting, setSubmitting] = useState(false);
+   657→   657→
+   658→   658→  const load = useCallback(async () => {
+   659→   659→    setLoading(true);
+   660→   660→    setError(null);
+   661→   661→    try {
+   662→   662→      const res = await api.get<SessionData>(`/api/sessions/${sessionId}`);
+   663→   663→      setData(res);
+   664→   664→      const restored: Record<number, unknown> = {};
+   665→   665→      const fb: Record<number, CorrectionFeedback> = {};
+   666→   666→      for (const it of res.items) {
+   667→   667→        if (it.lastAnswer != null) restored[it.questionIdx] = it.lastAnswer;
+   668→   668→        if (it.feedback) fb[it.questionIdx] = it.feedback;
+   669→   669→      }
+   670→   670→      setDrafts(restored);
+   671→   671→      setFeedbacks(fb);
+   672→   672→      setExecResult(null);
+   673→   673→      setSqlResult(null);
+   674→   674→    } catch (e) {
+   675→   675→      setError(e instanceof Error ? e.message : "Erreur de chargement de la session.");
+   676→   676→    } finally {
+   677→   677→      setLoading(false);
+   678→   678→    }
+   679→   679→  }, [sessionId]);
+   680→   680→
+   681→   681→  useEffect(() => {
+   682→   682→    void load();
+   683→   683→  }, [load]);
+   684→   684→
+   685→   685→  const session = data?.session ?? null;
+   686→   686→  const questions = data?.questions ?? [];
+   687→   687→  const items = data?.items ?? [];
+   688→   688→  const q = questions[current];
+   689→   689→  const item = items.find((it) => it.questionIdx === current) ?? null;
+   690→   690→  const inProgress = session?.status === "IN_PROGRESS";
+   691→   691→  const immediate = inProgress && session?.mode === "apprentissage" && session?.config?.correctionTiming !== "end";
+   692→   692→  const hintsAllowed = inProgress && session?.mode !== "examen" && session?.config?.hintsEnabled !== false;
+   693→   693→  const feedback = inProgress ? feedbacks[current] : (item?.feedback ?? null);
+   694→   694→  const answeredCount = inProgress
+   695→   695→    ? questions.reduce((acc, qq, i) => acc + (hasAnswer(qq, drafts[i]) ? 1 : 0), 0)
+   696→   696→    : questions.length;
+   697→   697→  const isLast = current >= questions.length - 1;
+   698→   698→  const feedbackForCurrentExists = feedback != null;
+   699→   699→
+   700→   700→  function setDraft(value: unknown) {
+   701→   701→    setDrafts((prev) => ({ ...prev, [current]: value }));
+   702→   702→  }
+   703→   703→
+   704→   704→  function goTo(i: number) {
+   705→   705→    setCurrent(Math.max(0, Math.min(i, Math.max(0, questions.length - 1))));
+   706→   706→    setExecResult(null);
+   707→   707→    setSqlResult(null);
+   708→   708→  }
+   709→   709→
+   710→   710→  async function validateAnswer() {
+   711→   711→    if (!session || !q) return;
+   712→   712→    setSaving(true);
+   713→   713→    try {
+   714→   714→      const res = await api.post<{ ok: boolean; graded: boolean; feedback: CorrectionFeedback | null }>(
+   715→   715→        `/api/sessions/${session.id}/answer`,
+   716→   716→        { questionIdx: current, value: drafts[current] ?? null }
+   717→   717→      );
+   718→   718→      if (res.graded && res.feedback) {
+   719→   719→        setFeedbacks((prev) => ({ ...prev, [current]: res.feedback as CorrectionFeedback }));
+   720→   720→        const v = res.feedback.verdict;
+   721→   721→        toast({
+   722→   722→          title: v === "correct" ? "Réponse correcte" : v === "partial" ? "Réponse partiellement correcte" : "Réponse incorrecte",
+   723→   723→          description: immediate ? "Vous pouvez améliorer votre réponse puis revalider." : undefined,
+   724→   724→        });
+   725→   725→      } else {
+   726→   726→        toast({ title: "Réponse enregistrée", description: "Elle sera corrigée à la fin de la session." });
+   727→   727→        if (!isLast) goTo(current + 1);
+   728→   728→      }
+   729→   729→    } catch (e) {
+   730→   730→      toast({ title: "Échec de l'enregistrement", description: e instanceof Error ? e.message : undefined, variant: "destructive" });
+   731→   731→    } finally {
+   732→   732→      setSaving(false);
+   733→   733→    }
+   734→   734→  }
+   735→   735→
+   736→   736→  async function askHint() {
+   737→   737→    if (!session || !q) return;
+   738→   738→    try {
+   739→   739→      const res = await api.post<{ hint: string | null; message?: string; remaining?: number }>(
+
+[showing lines 40-739 of 1351; use offset=740 with limit to continue reading]

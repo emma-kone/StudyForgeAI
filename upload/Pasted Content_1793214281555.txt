@@ -1,0 +1,925 @@
+# PROMPT DE REPRISE, D'AUDIT ET DE CORRECTION DE STUDYFORGE AI
+
+## 1. MISSION PRINCIPALE
+
+Tu interviens sur un projet existant : StudyForge AI, une plateforme web personnelle d'apprentissage, de révision et d'évaluation assistée par intelligence artificielle.
+
+Une première version de la plateforme a déjà été développée. Elle possède une interface, des fonctionnalités et une organisation du code qu'il faut examiner avant toute modification.
+
+Ta mission est de reprendre le projet existant, d'identifier les problèmes fonctionnels et structurels, puis de corriger réellement les défauts constatés.
+
+L'objectif n'est pas de reconstruire arbitrairement l'application ni de remplacer son interface par une nouvelle conception.
+
+L'objectif est d'améliorer la qualité du projet existant tout en préservant son identité visuelle, ses fonctionnalités utiles et ses données.
+
+### Règle fondamentale
+
+**Conserve le design actuel et améliore le fonctionnement de l'application sans détruire ce qui a déjà été réalisé.**
+
+Tu dois travailler directement dans les fichiers du projet lorsque ton environnement le permet.
+
+Ne te contente pas de proposer des recommandations, de fournir des extraits de code ou de décrire les corrections nécessaires. Tu dois les implémenter.
+
+Ne prétends pas qu'une correction fonctionne si tu ne l'as pas vérifiée.
+
+Si une fonctionnalité est déjà correctement implémentée, conserve-la. Si elle fonctionne partiellement, corrige-la. Si elle est mal conçue, réorganise sa logique en préservant autant que possible son interface.
+
+Ne remplace pas une fonctionnalité réelle par une simulation, des données fictives ou un bouton sans comportement.
+
+---
+
+## 2. PREMIÈRE ÉTAPE : AUDITER LE PROJET EXISTANT
+
+Avant de modifier le code, examine l'ensemble du projet.
+
+Analyse notamment :
+
+- La structure des dossiers et des fichiers.
+- Les composants de l'interface.
+- Les pages et les routes.
+- Les services et fonctions métier.
+- La gestion de l'état de l'application.
+- La persistance des données.
+- Les modèles de données.
+- Les relations entre les matières, les chapitres et les documents.
+- Le processus d'importation des fichiers.
+- Les fonctions d'analyse documentaire.
+- Les intégrations avec l'intelligence artificielle.
+- Les formulaires de création et de modification.
+- Les filtres et les mécanismes de recherche.
+- Les traitements asynchrones.
+- Les mécanismes de sauvegarde.
+- Les éventuelles erreurs présentes dans la console.
+- Les tests existants.
+
+Identifie les problèmes qui provoquent une mauvaise organisation des cours, des pertes d'état, des associations incorrectes entre documents et chapitres ou des réinitialisations inattendues.
+
+Examine également les éventuelles incohérences entre l'interface, les données enregistrées et les règles de gestion.
+
+### Rapport d'audit
+
+Avant de commencer les modifications, établis un diagnostic concis comprenant :
+
+1. Les fonctionnalités existantes qui fonctionnent correctement.
+2. Les fonctionnalités partiellement opérationnelles.
+3. Les bugs identifiés.
+4. Les incohérences dans l'organisation des données.
+5. Les problèmes de gestion de l'état.
+6. Les problèmes de persistance.
+7. Les éventuels problèmes de performance.
+8. Les modifications nécessaires et leurs dépendances.
+
+Ce diagnostic doit être fondé sur le code réellement examiné, et non sur des suppositions.
+
+Après cet audit, passe directement à l'implémentation. Ne t'arrête pas au rapport et ne demande pas une nouvelle autorisation pour chaque correction.
+
+---
+
+## 3. PRÉSERVER LE DESIGN EXISTANT
+
+La plateforme possède déjà une identité visuelle.
+
+Je ne souhaite pas une refonte graphique complète.
+
+### Éléments à préserver
+
+Conserve autant que possible :
+
+- La palette de couleurs.
+- La typographie.
+- La police principale Bricolage Grotesque.
+- La navigation existante.
+- Les composants graphiques.
+- La disposition générale des pages.
+- Les espacements et les proportions.
+- Les icônes.
+- Les boutons.
+- Les cartes.
+- Les panneaux latéraux.
+- Les animations et transitions existantes.
+- Le thème visuel.
+- Les éléments graphiques distinctifs.
+- Les composants déjà fonctionnels.
+
+Ne remplace pas systématiquement les composants existants par de nouveaux composants simplement parce que tu préfères une autre approche.
+
+### Modifications visuelles autorisées
+
+Tu peux modifier un élément visuel lorsque cela est nécessaire pour :
+
+- Corriger un problème d'ergonomie.
+- Clarifier une action.
+- Éviter une mauvaise association entre des données.
+- Ajouter une fonctionnalité manquante.
+- Afficher correctement les erreurs.
+- Rendre la hiérarchie des cours plus compréhensible.
+- Corriger un affichage incohérent.
+- Améliorer la navigation dans les matières et les chapitres.
+
+Toute modification doit rester cohérente avec le design actuel.
+
+Ne transforme pas l'application en une nouvelle interface sans rapport avec celle qui existe.
+
+### Règle de validation visuelle
+
+Avant de modifier une page importante, identifie son fonctionnement et ses composants actuels.
+
+Après modification, vérifie que la page conserve son identité visuelle et que les nouvelles fonctionnalités s'intègrent naturellement.
+
+Si des tests visuels ou des captures d'écran sont disponibles, utilise-les pour vérifier les différences.
+
+---
+
+## 4. RESTRUCTURER LA GESTION DES COURS
+
+C'est l'une des priorités absolues du projet.
+
+La gestion actuelle des cours doit être examinée et réorganisée afin d'obtenir une structure logique, prévisible et facile à utiliser.
+
+### 4.1. Hiérarchie officielle
+
+La structure principale doit être :
+
+**Matière → Chapitres → Documents**
+
+Exemple :
+
+Matière : Bases de données
+
+- Chapitre 1 : Introduction aux bases de données
+  - Introduction_BDD.pdf
+  - Cours_BDD.docx
+- Chapitre 2 : Modèle relationnel
+  - Modele_relationnel.pdf
+  - Exercices_relationnel.docx
+- Chapitre 3 : SQL
+  - Cours_SQL.pdf
+  - Exercices_SQL.pdf
+  - TP_SQL.docx
+
+Cette structure doit être représentée correctement dans l'interface, dans les données enregistrées et dans les fonctionnalités utilisant les cours.
+
+Ne crée pas plusieurs systèmes concurrents d'organisation des mêmes documents.
+
+### 4.2. Création d'une matière
+
+Je dois pouvoir créer une matière indépendamment de l'importation de documents.
+
+Le formulaire doit permettre de définir, au minimum :
+
+- Le nom de la matière.
+- Une description facultative.
+- Une couleur ou une icône si le design existant le permet.
+
+La création doit être validée avant l'enregistrement.
+
+Empêche les doublons accidentels de matières portant le même nom après normalisation raisonnable du texte, tout en permettant de distinguer deux matières volontairement différentes lorsque cela est nécessaire.
+
+Une matière nouvellement créée doit apparaître immédiatement dans l'interface, sans nécessiter un rechargement complet de l'application.
+
+Elle doit également être disponible dans les formulaires et les fonctionnalités qui utilisent les matières.
+
+### 4.3. Création d'un chapitre
+
+Un chapitre doit obligatoirement appartenir à une matière existante.
+
+Lors de la création, l'utilisateur doit pouvoir :
+
+- Sélectionner la matière parente.
+- Saisir le nom du chapitre.
+- Ajouter une description facultative.
+- Définir sa position dans la matière si l'ordre est personnalisable.
+
+Un chapitre ne doit jamais être enregistré sans matière parente valide.
+
+Le système doit empêcher les associations incohérentes.
+
+Deux chapitres portant le même nom peuvent exister dans des matières différentes.
+
+La gestion des doublons doit donc être effectuée dans le contexte de la matière concernée.
+
+### 4.4. Modification et suppression
+
+Je dois pouvoir :
+
+- Renommer une matière.
+- Modifier sa description.
+- Renommer un chapitre.
+- Modifier la description d'un chapitre.
+- Réorganiser l'ordre des chapitres.
+- Déplacer un chapitre vers une autre matière.
+- Supprimer une matière.
+- Supprimer un chapitre.
+
+Toute suppression doit être précédée d'une confirmation lorsque des données associées risquent d'être affectées.
+
+Avant de supprimer une matière, vérifier si elle contient des chapitres, des documents, des résumés, des conversations ou des exercices associés.
+
+Avant de supprimer un chapitre, vérifier s'il contient des documents et des données pédagogiques liées.
+
+Ne supprime pas silencieusement les fichiers originaux, les résultats ou les autres données associées.
+
+Lorsqu'une suppression peut entraîner une perte de données, présenter clairement les conséquences et proposer une solution adaptée.
+
+Si cela est nécessaire, permettre de déplacer les documents vers une autre matière ou un autre chapitre avant la suppression.
+
+Les règles de suppression doivent être appliquées de façon cohérente dans l'interface et dans la couche de persistance.
+
+---
+
+## 5. SÉPARER STRICTEMENT LES DOCUMENTS DES MATIÈRES ET DES CHAPITRES
+
+Le nom d'un document, celui d'une matière et celui d'un chapitre représentent trois informations différentes.
+
+Ils ne doivent jamais être confondus.
+
+### 5.1. Identité du document
+
+Chaque document importé doit posséder au minimum :
+
+- Un identifiant unique.
+- Le nom original du fichier.
+- Un titre d'affichage éventuellement modifiable.
+- Le type de fichier.
+- La taille du fichier.
+- La date d'importation.
+- Son emplacement principal dans la hiérarchie.
+- Son état de traitement.
+- Ses métadonnées d'analyse lorsque disponibles.
+
+Le nom du fichier original doit être conservé séparément du titre d'affichage.
+
+Par exemple :
+
+- Nom original : `Chapitre_03_SQL.pdf`
+- Titre d'affichage : `Introduction aux requêtes SQL`
+- Matière : `Bases de données`
+- Chapitre : `SQL`
+
+Ces quatre informations doivent rester indépendantes.
+
+### 5.2. Ne jamais déduire automatiquement une matière du nom du fichier
+
+L'importation d'un fichier appelé `Java.pdf` ne doit pas créer automatiquement une matière appelée « Java ».
+
+De même, l'importation d'un fichier appelé `Chapitre_1.pdf` ne doit pas créer automatiquement un chapitre.
+
+L'utilisateur doit pouvoir choisir où ranger le document.
+
+L'IA peut suggérer une matière ou un chapitre en analysant le contenu, mais cette suggestion doit être distincte d'une association effectivement enregistrée.
+
+Si aucune matière n'existe encore, proposer de la créer explicitement.
+
+Ne transforme jamais une suggestion de classement en création automatique silencieuse.
+
+### 5.3. Un document doit pouvoir être renommé indépendamment
+
+Modifier le titre d'affichage d'un document ne doit pas renommer sa matière ou son chapitre.
+
+Renommer une matière ne doit pas renommer les fichiers qu'elle contient.
+
+Renommer un chapitre ne doit pas modifier le nom original des documents associés.
+
+Chaque action doit modifier uniquement les informations concernées.
+
+### 5.4. Emplacement principal et réutilisation des sources
+
+Pour garder une organisation simple, chaque document doit avoir un emplacement principal clairement identifié dans la hiérarchie.
+
+Si le projet permet déjà d'associer un même document à plusieurs groupes de travail, conserve cette capacité lorsqu'elle est fonctionnelle.
+
+Dans ce cas, distingue :
+
+- L'emplacement principal du document.
+- Ses éventuelles associations secondaires.
+- Les sélections temporaires de documents pour une session d'étude.
+
+Ne crée pas plusieurs copies physiques d'un même fichier simplement parce qu'il est utilisé dans plusieurs contextes.
+
+Si une fonctionnalité d'association secondaire n'existe pas encore et n'est pas nécessaire, ne complexifie pas inutilement la première version.
+
+---
+
+## 6. CRÉER UN PARCOURS D'AJOUT DE COURS CLAIR
+
+Le processus actuel d'ajout de cours doit être examiné et simplifié.
+
+L'objectif est d'éviter les formulaires désordonnés, les associations incorrectes, les créations involontaires et les opérations qui se contredisent.
+
+### 6.1. Parcours de création recommandé
+
+Lorsque l'utilisateur souhaite organiser un nouveau cours, proposer un parcours guidé.
+
+**Étape 1 — Choisir la matière**
+
+Afficher les matières existantes et proposer une action distincte pour en créer une nouvelle.
+
+Si l'utilisateur choisit une matière existante, ne pas en créer une autre automatiquement.
+
+**Étape 2 — Choisir ou créer le chapitre**
+
+Afficher uniquement les chapitres appartenant à la matière sélectionnée.
+
+Permettre de choisir un chapitre existant ou d'en créer un nouveau dans cette matière.
+
+Ne pas afficher comme choix principal les chapitres appartenant à d'autres matières.
+
+**Étape 3 — Ajouter les documents**
+
+Permettre d'importer un ou plusieurs fichiers.
+
+Afficher la liste des fichiers sélectionnés avant validation.
+
+Pour chaque fichier, présenter :
+
+- Le nom original.
+- Le type.
+- La taille.
+- Le statut de validation.
+- L'emplacement choisi.
+
+Permettre de retirer un fichier de la sélection avant l'importation.
+
+**Étape 4 — Vérifier le classement**
+
+Présenter un récapitulatif clair :
+
+- Matière sélectionnée.
+- Chapitre sélectionné.
+- Documents à importer.
+
+Permettre de revenir aux étapes précédentes sans perdre les informations saisies.
+
+**Étape 5 — Enregistrer et traiter**
+
+Après validation, enregistrer les documents et leurs associations de manière cohérente.
+
+Déclencher ensuite l'extraction et l'analyse documentaire selon les fonctionnalités existantes.
+
+Le processus doit afficher son état et permettre de retrouver les documents même si l'analyse n'est pas encore terminée.
+
+### 6.2. Ajouter des documents à un cours existant
+
+Prévoir une action claire permettant d'ajouter des documents à un chapitre existant.
+
+Ce parcours ne doit pas obliger l'utilisateur à recréer la matière ou le chapitre.
+
+L'ajout doit simplement compléter le contenu existant.
+
+Il ne doit pas :
+
+- Dupliquer la matière.
+- Recréer le chapitre.
+- Réinitialiser les documents précédents.
+- Supprimer les analyses existantes.
+- Relancer inutilement le traitement de toute la matière.
+
+Seuls les nouveaux documents doivent être importés et traités.
+
+### 6.3. Validation et erreurs
+
+Empêcher l'enregistrement lorsque les informations indispensables sont absentes.
+
+Afficher des erreurs précises lorsque :
+
+- Aucune matière n'est sélectionnée.
+- Aucun chapitre n'est sélectionné alors qu'il est obligatoire.
+- Le chapitre ne correspond pas à la matière choisie.
+- Un fichier possède un format non pris en charge.
+- Un fichier est invalide.
+- L'importation échoue.
+- Une association ne peut pas être enregistrée.
+
+En cas d'échec, conserver autant que possible les données déjà saisies.
+
+Ne vide pas tout le formulaire après une erreur qui ne nécessite pas une remise à zéro.
+
+---
+
+## 7. REVOIR LA NAVIGATION ET LES FILTRES
+
+La navigation doit refléter la structure réelle des cours.
+
+### 7.1. Navigation principale
+
+La bibliothèque des cours doit permettre de parcourir naturellement :
+
+1. Les matières.
+2. Les chapitres d'une matière.
+3. Les documents d'un chapitre.
+
+L'utilisateur doit comprendre à tout moment où il se trouve.
+
+Afficher un chemin de navigation lorsque cela améliore la compréhension.
+
+Exemple :
+
+`Mes cours > Bases de données > SQL > Cours_SQL.pdf`
+
+Chaque niveau du chemin doit permettre de revenir à l'écran correspondant.
+
+### 7.2. Rôle des filtres
+
+Le filtre par matière peut être conservé lorsqu'il est utile, notamment dans une bibliothèque générale de documents.
+
+Cependant, il ne doit pas remplacer l'organisation hiérarchique.
+
+Les filtres doivent affiner une liste existante, et non déterminer implicitement la création ou la structure des cours.
+
+Ne crée jamais une matière ou un chapitre simplement parce qu'un filtre est sélectionné.
+
+### 7.3. Cohérence de l'affichage
+
+Lorsqu'une matière est sélectionnée, afficher uniquement les chapitres et documents qui lui sont associés.
+
+Lorsqu'un chapitre est sélectionné, afficher uniquement les documents qui lui appartiennent.
+
+Lorsque l'utilisateur revient à la bibliothèque générale, restaurer un état cohérent sans afficher des documents provenant d'un contexte incompatible.
+
+Les filtres, la recherche et la navigation doivent utiliser les mêmes règles d'association.
+
+### 7.4. Changement de contexte
+
+Si l'utilisateur change de matière alors qu'un formulaire de création de chapitre est ouvert, vérifier que le chapitre en cours de création reste cohérent avec la nouvelle matière.
+
+Ne conserve pas silencieusement une sélection de chapitre devenue invalide.
+
+Si le changement de contexte risque de modifier des données saisies, avertir l'utilisateur lorsque cela est nécessaire et lui permettre de conserver ou d'abandonner ses modifications.
+
+---
+
+## 8. CORRIGER LA PERTE D'ÉTAT LORS DES CHANGEMENTS DE FENÊTRE
+
+Un problème important concerne les informations, les sélections et les processus qui disparaissent lorsque l'utilisateur change de page, de fenêtre ou de section de l'application.
+
+Tu dois examiner précisément ces comportements et déterminer leur cause.
+
+Il faut distinguer trois catégories d'état.
+
+### 8.1. État temporaire de l'interface
+
+Il comprend notamment :
+
+- Le panneau actuellement ouvert.
+- L'onglet actif.
+- La position dans une page.
+- Les filtres temporaires.
+- L'ouverture ou la fermeture d'une fenêtre modale.
+
+Cet état peut rester temporaire, mais il ne doit pas être réinitialisé sans raison à chaque changement de vue.
+
+Lorsque cela améliore l'expérience, conserver la dernière sélection pendant la navigation.
+
+### 8.2. État de travail et brouillons
+
+Il comprend :
+
+- Les champs remplis dans un formulaire.
+- Les documents sélectionnés avant validation.
+- Les paramètres de génération d'un exercice.
+- Les messages en cours de rédaction.
+- Le code saisi dans l'éditeur.
+- Les réponses à un exercice en cours.
+- Les modifications non encore enregistrées.
+- Les options choisies pour un résumé.
+
+Ces informations doivent être conservées pendant les changements de vue et les opérations de navigation, dans la mesure où le parcours utilisateur suppose de pouvoir reprendre le travail.
+
+Mettre en place une sauvegarde automatique des brouillons lorsque cela est pertinent.
+
+Utiliser un mécanisme adapté au type de données : état applicatif partagé, stockage local ou persistance en base de données.
+
+Ne considère pas qu'un simple état conservé dans un composant suffit si ce composant est détruit à chaque navigation.
+
+### 8.3. État des opérations en cours
+
+Il comprend :
+
+- L'importation de fichiers.
+- L'extraction du texte.
+- L'analyse IA.
+- La génération d'un résumé.
+- La génération d'exercices.
+- La correction d'une réponse.
+- L'enregistrement des résultats.
+- Les opérations de sauvegarde.
+
+Ces opérations ne doivent pas dépendre uniquement de la présence du composant visuel qui les a lancées.
+
+Si l'utilisateur change de page, l'opération doit continuer lorsque cela est techniquement possible.
+
+Son état doit rester consultable depuis l'interface appropriée.
+
+### 8.4. Ne pas réinitialiser une opération en cours
+
+Si l'utilisateur lance l'analyse d'un document puis ouvre une autre fenêtre, le traitement ne doit pas repartir de zéro simplement parce que l'écran a changé.
+
+À son retour, il doit pouvoir consulter le statut réel de l'opération.
+
+Prévoir des états explicites, tels que :
+
+- En attente.
+- En cours.
+- Terminé.
+- Échec.
+- Annulé.
+
+Une opération ne doit pas être déclarée terminée tant que le résultat n'a pas été correctement enregistré.
+
+En cas d'échec, permettre de réessayer sans créer des doublons ni perdre les données déjà traitées.
+
+### 8.5. Persistance des opérations
+
+Pour les traitements importants, enregistrer les informations nécessaires à leur suivi dans une couche persistante.
+
+Le suivi doit être indépendant du composant d'interface.
+
+Lorsque l'application est fermée puis relancée, elle doit pouvoir retrouver les opérations persistées et déterminer leur véritable état.
+
+Ne marque pas automatiquement toutes les opérations interrompues comme terminées.
+
+Si une opération était en cours au moment de l'arrêt, appliquer une stratégie de reprise ou de réconciliation adaptée à sa nature.
+
+Ne relance pas automatiquement une opération coûteuse sans vérifier si elle peut être reprise ou si son résultat existe déjà.
+
+### 8.6. Navigation et soumission
+
+Éviter qu'un changement de route entraîne involontairement :
+
+- La suppression d'un brouillon.
+- La remise à zéro d'un formulaire.
+- La perte du code saisi.
+- La perte d'une réponse.
+- Le lancement d'une deuxième génération.
+- La création de plusieurs documents identiques.
+- La perte de la sélection des sources.
+
+Un changement de page ne doit pas être interprété comme une annulation explicite.
+
+L'annulation doit résulter d'une action claire de l'utilisateur ou d'une nécessité technique réelle.
+
+---
+
+## 9. ASSURER LA COHÉRENCE DES DONNÉES
+
+Examine la structure de persistance existante et corrige les relations incohérentes.
+
+Le système doit distinguer au minimum :
+
+- Les matières.
+- Les chapitres.
+- Les documents.
+- Les métadonnées des documents.
+- Les contenus extraits.
+- Les analyses documentaires.
+- Les résumés.
+- Les conversations.
+- Les exercices.
+- Les tentatives.
+- Les réponses.
+- Les corrections.
+- Les résultats.
+- Les opérations en cours.
+
+Adapte cette structure à l'architecture existante plutôt que de créer inutilement plusieurs modèles représentant la même information.
+
+### 9.1. Relations
+
+Chaque chapitre doit référencer une matière valide.
+
+Chaque document doit référencer un emplacement valide selon les règles retenues.
+
+Chaque résultat doit être associé à la bonne tentative.
+
+Chaque analyse doit correspondre au document ou à la version du contenu qui a réellement été analysé.
+
+### 9.2. Enregistrements cohérents
+
+Les opérations de création et de déplacement doivent préserver la cohérence des relations.
+
+Si une opération implique plusieurs modifications dépendantes, utiliser une transaction ou un mécanisme équivalent lorsque la technologie le permet.
+
+Éviter les situations où une matière est créée mais son chapitre échoue silencieusement, ou où un document apparaît dans l'interface sans association valide dans la base de données.
+
+### 9.3. Migrations et données existantes
+
+Avant toute modification du schéma de données :
+
+1. Examiner les modèles actuels.
+2. Identifier les données déjà enregistrées.
+3. Déterminer les relations existantes.
+4. Prévoir une migration compatible.
+5. Préserver les données utiles.
+6. Vérifier les nouvelles contraintes.
+
+Ne supprime pas la base de données pour repartir de zéro.
+
+Ne supprime pas les matières, chapitres, documents ou résultats existants simplement pour simplifier la migration.
+
+Si des documents sont déjà mal classés, prévoir une méthode de correction qui permette de les rattacher à la bonne matière et au bon chapitre.
+
+Lorsqu'une association existante est ambiguë, ne devine pas silencieusement la destination.
+
+Conserve les données et signale les éléments nécessitant une vérification.
+
+---
+
+## 10. AMÉLIORER LA LOGIQUE DES TRAITEMENTS IA
+
+La correction de la structure documentaire doit se répercuter sur les fonctionnalités d'intelligence artificielle.
+
+### 10.1. Sélection des sources
+
+Pour chaque opération, l'utilisateur doit pouvoir sélectionner clairement son périmètre :
+
+- Un document.
+- Plusieurs documents.
+- Un chapitre.
+- Une matière.
+- Une sélection personnalisée.
+
+L'application doit traduire ce choix en une liste précise de documents sources.
+
+Ne déduis pas les sources à partir du nom d'une matière ou d'un chapitre.
+
+### 10.2. Résumés
+
+Lorsqu'un résumé est demandé pour un chapitre, utiliser les documents associés à ce chapitre, sauf si l'utilisateur choisit explicitement d'autres sources.
+
+Lorsqu'un résumé est demandé pour une matière entière, utiliser les documents des chapitres concernés.
+
+Permettre de sélectionner le niveau de détail et de produire un plan de cours navigable.
+
+Les résumés doivent être sauvegardés indépendamment des documents originaux.
+
+L'ajout d'un nouveau document ne doit pas effacer les résumés déjà créés.
+
+Si un résumé devient potentiellement obsolète après une modification du cours, signaler cette situation plutôt que de le remplacer silencieusement.
+
+### 10.3. Chat documentaire
+
+Le chat doit respecter les documents sélectionnés.
+
+Une conversation associée à un chapitre ne doit pas changer de contexte sans raison lorsque l'utilisateur navigue ailleurs.
+
+Conserver la conversation, les messages et les sources utilisées.
+
+Si l'utilisateur change explicitement les sources, refléter ce changement dans l'interface.
+
+Ne pas mélanger silencieusement des documents de matières différentes.
+
+### 10.4. Génération d'exercices
+
+Lors de la création d'un exercice, utiliser les sources correspondant à la sélection explicite.
+
+Afficher les documents utilisés lorsque cela est utile.
+
+Ne génère pas automatiquement des exercices à partir de toute la bibliothèque si l'utilisateur a sélectionné un chapitre précis.
+
+Conserver les paramètres de génération et les résultats obtenus.
+
+### 10.5. Ajout de nouveaux documents
+
+Lorsqu'un document est ajouté à un chapitre, traiter uniquement les données qui nécessitent réellement un nouveau traitement.
+
+Réutiliser les analyses existantes lorsqu'elles restent valides.
+
+Ne relance pas systématiquement l'analyse complète de toutes les matières.
+
+---
+
+## 11. CONSERVER LE COMPORTEMENT DE L'ÉDITEUR DE CODE ET DE LA CORRECTION
+
+La plateforme doit continuer à proposer les fonctionnalités pédagogiques déjà prévues.
+
+Cependant, la correction du code doit respecter la nouvelle exigence :
+
+**Le code soumis doit être analysé sans compilation ni exécution.**
+
+Conserver ou implémenter :
+
+- La coloration syntaxique.
+- L'indentation.
+- La numérotation des lignes.
+- La sauvegarde des brouillons.
+- La sélection du langage.
+- La soumission des réponses.
+- L'analyse statique par IA.
+- La détection des erreurs probables.
+- La vérification de la cohérence logique.
+- La correction pédagogique.
+- La notation.
+- L'historique des tentatives.
+
+L'IA doit distinguer les erreurs détectables, les problèmes probables et les points impossibles à confirmer sans exécution.
+
+Ne prétends jamais qu'un code a été exécuté ou compilé si ce n'est pas le cas.
+
+Pour SQL, appliquer également une analyse sans exécution : syntaxe, structure, logique, relations et conformité à la consigne, selon les informations disponibles.
+
+Ne supprime pas l'éditeur de code ni les exercices SQL sous prétexte de supprimer l'exécution.
+
+---
+
+## 12. PRÉSERVER LES FONCTIONNALITÉS EXISTANTES
+
+Avant de modifier un module, identifie les fonctionnalités qui en dépendent.
+
+Une correction de la gestion des cours ne doit pas casser :
+
+- L'importation de documents.
+- La prévisualisation.
+- L'extraction du texte.
+- L'analyse IA.
+- Les résumés.
+- Le chat.
+- La génération d'exercices.
+- Les réponses aux exercices.
+- La correction.
+- La notation.
+- L'historique.
+- Le tableau de bord.
+- Les paramètres.
+- La sauvegarde.
+
+Si une modification structurelle impose d'adapter plusieurs modules, effectue les adaptations nécessaires dans l'ensemble du projet.
+
+Ne laisse pas une page utiliser l'ancien modèle de données pendant qu'une autre utilise le nouveau.
+
+Évite les corrections locales qui masquent le problème sans résoudre sa cause.
+
+---
+
+## 13. TESTS OBLIGATOIRES
+
+Créer ou adapter des tests pour vérifier le comportement réel de l'application.
+
+Les tests doivent couvrir les cas normaux, les erreurs et les changements de contexte.
+
+### A. Matières
+
+- Créer une matière.
+- Modifier son nom.
+- Créer plusieurs matières.
+- Vérifier la gestion des doublons.
+- Vérifier que les matières sont conservées après redémarrage.
+- Supprimer une matière contenant des données associées.
+- Vérifier que les conséquences de la suppression sont maîtrisées.
+
+### B. Chapitres
+
+- Créer un chapitre dans une matière.
+- Créer plusieurs chapitres dans la même matière.
+- Créer deux chapitres portant le même nom dans deux matières différentes.
+- Vérifier qu'un chapitre ne peut pas être associé à une matière inexistante.
+- Déplacer un chapitre vers une autre matière.
+- Vérifier que les documents restent cohérents après le déplacement.
+
+### C. Documents
+
+- Importer plusieurs fichiers dans un même chapitre.
+- Ajouter un document à un chapitre existant.
+- Vérifier que les noms des fichiers restent indépendants des noms des matières et des chapitres.
+- Renommer un document sans renommer sa matière.
+- Déplacer un document vers un autre chapitre.
+- Vérifier que les documents précédents restent présents.
+- Vérifier que les doublons sont gérés correctement.
+- Vérifier que les erreurs d'importation ne provoquent pas de pertes de données.
+
+### D. Navigation et filtres
+
+- Ouvrir une matière.
+- Consulter ses chapitres.
+- Ouvrir un chapitre.
+- Consulter ses documents.
+- Revenir à la matière.
+- Utiliser un filtre.
+- Effacer le filtre.
+- Vérifier que les données affichées restent cohérentes.
+
+### E. Conservation de l'état
+
+- Remplir un formulaire.
+- Changer de page.
+- Revenir au formulaire.
+- Vérifier que les informations sont conservées selon le comportement attendu.
+- Sélectionner des documents pour une génération.
+- Changer de fenêtre.
+- Vérifier que la sélection est conservée.
+- Écrire du code dans un exercice.
+- Naviguer ailleurs.
+- Revenir et vérifier que le brouillon est conservé.
+- Lancer une analyse IA.
+- Changer de page pendant le traitement.
+- Vérifier que l'opération continue ou peut être reprise correctement.
+- Relancer l'application pendant qu'une opération est en cours.
+- Vérifier que son état est correctement réconcilié.
+
+### F. Cohérence et absence de doublons
+
+- Double-cliquer sur une action de création.
+- Simuler une erreur pendant l'enregistrement.
+- Réessayer une opération échouée.
+- Vérifier qu'aucun document ou chapitre identique n'est créé involontairement.
+- Vérifier qu'une opération terminée n'est pas relancée sans nécessité.
+
+### G. Non-régression
+
+Vérifier que les résumés, le chat, les exercices, les corrections et l'historique fonctionnent toujours après les modifications.
+
+Ne te contente pas de vérifier que le projet démarre.
+
+Teste les principaux parcours utilisateur de bout en bout.
+
+Corrige les problèmes découverts avant de déclarer le travail terminé.
+
+Ne prétends jamais avoir exécuté un test que tu n'as pas réellement lancé.
+
+---
+
+## 14. MÉTHODE DE TRAVAIL
+
+Travaille dans cet ordre.
+
+### Phase 1 — Audit
+
+Examine le projet existant et identifie les problèmes.
+
+### Phase 2 — Diagnostic
+
+Détermine les causes des incohérences et des pertes d'état.
+
+### Phase 3 — Modèle de données
+
+Vérifie et corrige les relations entre les matières, les chapitres et les documents.
+
+Prépare les migrations nécessaires sans supprimer les données existantes.
+
+### Phase 4 — Gestion des cours
+
+Corrige les formulaires, les parcours de création, les associations et la navigation.
+
+### Phase 5 — Gestion de l'état
+
+Corrige les réinitialisations intempestives et la conservation des opérations en cours.
+
+### Phase 6 — Intégration
+
+Vérifie que les résumés, le chat, les exercices et les autres fonctionnalités utilisent correctement la structure documentaire.
+
+### Phase 7 — Tests
+
+Exécute les tests disponibles, ajoute ceux qui manquent et corrige les régressions.
+
+### Phase 8 — Livraison
+
+Présente un bilan précis des modifications effectuées.
+
+Si tu disposes d'un terminal, utilise-le pour exécuter les commandes, les migrations et les tests nécessaires.
+
+Si tu disposes d'un environnement permettant de modifier directement le projet, applique les modifications dans les fichiers existants.
+
+Ne me demande pas de réaliser manuellement les corrections que tu peux effectuer toi-même.
+
+Si une contrainte technique bloque une partie du travail, termine les autres corrections possibles et indique précisément ce qui reste à faire.
+
+---
+
+## 15. CONDITIONS DE VALIDATION FINALE
+
+Le travail ne sera considéré comme terminé que si :
+
+- Le design existant a été préservé.
+- La hiérarchie Matière → Chapitres → Documents est cohérente.
+- Les matières et les chapitres peuvent être créés et modifiés correctement.
+- Plusieurs documents peuvent être ajoutés à un même chapitre.
+- Le nom du document est indépendant de celui de la matière et du chapitre.
+- L'importation ne crée pas de nouvelles matières ou de nouveaux chapitres sans action explicite.
+- Les filtres ne remplacent pas la hiérarchie documentaire.
+- Les formulaires d'ajout sont clairs et cohérents.
+- Les associations incorrectes sont empêchées.
+- Les brouillons ne disparaissent pas lors des changements de vue lorsque leur conservation est attendue.
+- Les opérations importantes ne sont pas réinitialisées inutilement.
+- Les traitements IA peuvent être suivis et repris selon leur état réel.
+- Les données restent cohérentes après redémarrage.
+- Les données existantes ont été préservées.
+- Les résumés, le chat et les exercices utilisent les bonnes sources.
+- Les principales fonctionnalités existantes continuent de fonctionner.
+- Les tests critiques ont été exécutés et leurs résultats sont documentés.
+- Les limitations restantes sont clairement indiquées.
+
+### Instruction finale
+
+**AUDITE, CORRIGE ET AMÉLIORE LA PLATEFORME STUDYFORGE AI EXISTANTE EN RESPECTANT STRICTEMENT CES EXIGENCES.**
+
+Ne reconstruis pas arbitrairement le projet.
+
+Ne change pas son identité visuelle sans nécessité.
+
+Ne te contente pas d'ajouter des boutons ou des écrans.
+
+Corrige les causes des problèmes, rétablis une logique de gestion cohérente et vérifie que les fonctionnalités sont réellement opérationnelles.
+
+Le résultat attendu est la version corrigée de la plateforme existante, avec une meilleure organisation des cours, une gestion fiable des documents, une navigation cohérente et une conservation correcte de l'état de travail.
+
+Commence par examiner le projet réel, puis effectue les modifications nécessaires jusqu'à obtenir un résultat fonctionnel et testé.

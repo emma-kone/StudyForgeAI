@@ -1,0 +1,925 @@
+     1→     1→# PROMPT DE REPRISE, D'AUDIT ET DE CORRECTION DE STUDYFORGE AI
+     2→     2→
+     3→     3→## 1. MISSION PRINCIPALE
+     4→     4→
+     5→     5→Tu interviens sur un projet existant : StudyForge AI, une plateforme web personnelle d'apprentissage, de révision et d'évaluation assistée par intelligence artificielle.
+     6→     6→
+     7→     7→Une première version de la plateforme a déjà été développée. Elle possède une interface, des fonctionnalités et une organisation du code qu'il faut examiner avant toute modification.
+     8→     8→
+     9→     9→Ta mission est de reprendre le projet existant, d'identifier les problèmes fonctionnels et structurels, puis de corriger réellement les défauts constatés.
+    10→    10→
+    11→    11→L'objectif n'est pas de reconstruire arbitrairement l'application ni de remplacer son interface par une nouvelle conception.
+    12→    12→
+    13→    13→L'objectif est d'améliorer la qualité du projet existant tout en préservant son identité visuelle, ses fonctionnalités utiles et ses données.
+    14→    14→
+    15→    15→### Règle fondamentale
+    16→    16→
+    17→    17→**Conserve le design actuel et améliore le fonctionnement de l'application sans détruire ce qui a déjà été réalisé.**
+    18→    18→
+    19→    19→Tu dois travailler directement dans les fichiers du projet lorsque ton environnement le permet.
+    20→    20→
+    21→    21→Ne te contente pas de proposer des recommandations, de fournir des extraits de code ou de décrire les corrections nécessaires. Tu dois les implémenter.
+    22→    22→
+    23→    23→Ne prétends pas qu'une correction fonctionne si tu ne l'as pas vérifiée.
+    24→    24→
+    25→    25→Si une fonctionnalité est déjà correctement implémentée, conserve-la. Si elle fonctionne partiellement, corrige-la. Si elle est mal conçue, réorganise sa logique en préservant autant que possible son interface.
+    26→    26→
+    27→    27→Ne remplace pas une fonctionnalité réelle par une simulation, des données fictives ou un bouton sans comportement.
+    28→    28→
+    29→    29→---
+    30→    30→
+    31→    31→## 2. PREMIÈRE ÉTAPE : AUDITER LE PROJET EXISTANT
+    32→    32→
+    33→    33→Avant de modifier le code, examine l'ensemble du projet.
+    34→    34→
+    35→    35→Analyse notamment :
+    36→    36→
+    37→    37→- La structure des dossiers et des fichiers.
+    38→    38→- Les composants de l'interface.
+    39→    39→- Les pages et les routes.
+    40→    40→- Les services et fonctions métier.
+    41→    41→- La gestion de l'état de l'application.
+    42→    42→- La persistance des données.
+    43→    43→- Les modèles de données.
+    44→    44→- Les relations entre les matières, les chapitres et les documents.
+    45→    45→- Le processus d'importation des fichiers.
+    46→    46→- Les fonctions d'analyse documentaire.
+    47→    47→- Les intégrations avec l'intelligence artificielle.
+    48→    48→- Les formulaires de création et de modification.
+    49→    49→- Les filtres et les mécanismes de recherche.
+    50→    50→- Les traitements asynchrones.
+    51→    51→- Les mécanismes de sauvegarde.
+    52→    52→- Les éventuelles erreurs présentes dans la console.
+    53→    53→- Les tests existants.
+    54→    54→
+    55→    55→Identifie les problèmes qui provoquent une mauvaise organisation des cours, des pertes d'état, des associations incorrectes entre documents et chapitres ou des réinitialisations inattendues.
+    56→    56→
+    57→    57→Examine également les éventuelles incohérences entre l'interface, les données enregistrées et les règles de gestion.
+    58→    58→
+    59→    59→### Rapport d'audit
+    60→    60→
+    61→    61→Avant de commencer les modifications, établis un diagnostic concis comprenant :
+    62→    62→
+    63→    63→1. Les fonctionnalités existantes qui fonctionnent correctement.
+    64→    64→2. Les fonctionnalités partiellement opérationnelles.
+    65→    65→3. Les bugs identifiés.
+    66→    66→4. Les incohérences dans l'organisation des données.
+    67→    67→5. Les problèmes de gestion de l'état.
+    68→    68→6. Les problèmes de persistance.
+    69→    69→7. Les éventuels problèmes de performance.
+    70→    70→8. Les modifications nécessaires et leurs dépendances.
+    71→    71→
+    72→    72→Ce diagnostic doit être fondé sur le code réellement examiné, et non sur des suppositions.
+    73→    73→
+    74→    74→Après cet audit, passe directement à l'implémentation. Ne t'arrête pas au rapport et ne demande pas une nouvelle autorisation pour chaque correction.
+    75→    75→
+    76→    76→---
+    77→    77→
+    78→    78→## 3. PRÉSERVER LE DESIGN EXISTANT
+    79→    79→
+    80→    80→La plateforme possède déjà une identité visuelle.
+    81→    81→
+    82→    82→Je ne souhaite pas une refonte graphique complète.
+    83→    83→
+    84→    84→### Éléments à préserver
+    85→    85→
+    86→    86→Conserve autant que possible :
+    87→    87→
+    88→    88→- La palette de couleurs.
+    89→    89→- La typographie.
+    90→    90→- La police principale Bricolage Grotesque.
+    91→    91→- La navigation existante.
+    92→    92→- Les composants graphiques.
+    93→    93→- La disposition générale des pages.
+    94→    94→- Les espacements et les proportions.
+    95→    95→- Les icônes.
+    96→    96→- Les boutons.
+    97→    97→- Les cartes.
+    98→    98→- Les panneaux latéraux.
+    99→    99→- Les animations et transitions existantes.
+   100→   100→- Le thème visuel.
+   101→   101→- Les éléments graphiques distinctifs.
+   102→   102→- Les composants déjà fonctionnels.
+   103→   103→
+   104→   104→Ne remplace pas systématiquement les composants existants par de nouveaux composants simplement parce que tu préfères une autre approche.
+   105→   105→
+   106→   106→### Modifications visuelles autorisées
+   107→   107→
+   108→   108→Tu peux modifier un élément visuel lorsque cela est nécessaire pour :
+   109→   109→
+   110→   110→- Corriger un problème d'ergonomie.
+   111→   111→- Clarifier une action.
+   112→   112→- Éviter une mauvaise association entre des données.
+   113→   113→- Ajouter une fonctionnalité manquante.
+   114→   114→- Afficher correctement les erreurs.
+   115→   115→- Rendre la hiérarchie des cours plus compréhensible.
+   116→   116→- Corriger un affichage incohérent.
+   117→   117→- Améliorer la navigation dans les matières et les chapitres.
+   118→   118→
+   119→   119→Toute modification doit rester cohérente avec le design actuel.
+   120→   120→
+   121→   121→Ne transforme pas l'application en une nouvelle interface sans rapport avec celle qui existe.
+   122→   122→
+   123→   123→### Règle de validation visuelle
+   124→   124→
+   125→   125→Avant de modifier une page importante, identifie son fonctionnement et ses composants actuels.
+   126→   126→
+   127→   127→Après modification, vérifie que la page conserve son identité visuelle et que les nouvelles fonctionnalités s'intègrent naturellement.
+   128→   128→
+   129→   129→Si des tests visuels ou des captures d'écran sont disponibles, utilise-les pour vérifier les différences.
+   130→   130→
+   131→   131→---
+   132→   132→
+   133→   133→## 4. RESTRUCTURER LA GESTION DES COURS
+   134→   134→
+   135→   135→C'est l'une des priorités absolues du projet.
+   136→   136→
+   137→   137→La gestion actuelle des cours doit être examinée et réorganisée afin d'obtenir une structure logique, prévisible et facile à utiliser.
+   138→   138→
+   139→   139→### 4.1. Hiérarchie officielle
+   140→   140→
+   141→   141→La structure principale doit être :
+   142→   142→
+   143→   143→**Matière → Chapitres → Documents**
+   144→   144→
+   145→   145→Exemple :
+   146→   146→
+   147→   147→Matière : Bases de données
+   148→   148→
+   149→   149→- Chapitre 1 : Introduction aux bases de données
+   150→   150→  - Introduction_BDD.pdf
+   151→   151→  - Cours_BDD.docx
+   152→   152→- Chapitre 2 : Modèle relationnel
+   153→   153→  - Modele_relationnel.pdf
+   154→   154→  - Exercices_relationnel.docx
+   155→   155→- Chapitre 3 : SQL
+   156→   156→  - Cours_SQL.pdf
+   157→   157→  - Exercices_SQL.pdf
+   158→   158→  - TP_SQL.docx
+   159→   159→
+   160→   160→Cette structure doit être représentée correctement dans l'interface, dans les données enregistrées et dans les fonctionnalités utilisant les cours.
+   161→   161→
+   162→   162→Ne crée pas plusieurs systèmes concurrents d'organisation des mêmes documents.
+   163→   163→
+   164→   164→### 4.2. Création d'une matière
+   165→   165→
+   166→   166→Je dois pouvoir créer une matière indépendamment de l'importation de documents.
+   167→   167→
+   168→   168→Le formulaire doit permettre de définir, au minimum :
+   169→   169→
+   170→   170→- Le nom de la matière.
+   171→   171→- Une description facultative.
+   172→   172→- Une couleur ou une icône si le design existant le permet.
+   173→   173→
+   174→   174→La création doit être validée avant l'enregistrement.
+   175→   175→
+   176→   176→Empêche les doublons accidentels de matières portant le même nom après normalisation raisonnable du texte, tout en permettant de distinguer deux matières volontairement différentes lorsque cela est nécessaire.
+   177→   177→
+   178→   178→Une matière nouvellement créée doit apparaître immédiatement dans l'interface, sans nécessiter un rechargement complet de l'application.
+   179→   179→
+   180→   180→Elle doit également être disponible dans les formulaires et les fonctionnalités qui utilisent les matières.
+   181→   181→
+   182→   182→### 4.3. Création d'un chapitre
+   183→   183→
+   184→   184→Un chapitre doit obligatoirement appartenir à une matière existante.
+   185→   185→
+   186→   186→Lors de la création, l'utilisateur doit pouvoir :
+   187→   187→
+   188→   188→- Sélectionner la matière parente.
+   189→   189→- Saisir le nom du chapitre.
+   190→   190→- Ajouter une description facultative.
+   191→   191→- Définir sa position dans la matière si l'ordre est personnalisable.
+   192→   192→
+   193→   193→Un chapitre ne doit jamais être enregistré sans matière parente valide.
+   194→   194→
+   195→   195→Le système doit empêcher les associations incohérentes.
+   196→   196→
+   197→   197→Deux chapitres portant le même nom peuvent exister dans des matières différentes.
+   198→   198→
+   199→   199→La gestion des doublons doit donc être effectuée dans le contexte de la matière concernée.
+   200→   200→
+   201→   201→### 4.4. Modification et suppression
+   202→   202→
+   203→   203→Je dois pouvoir :
+   204→   204→
+   205→   205→- Renommer une matière.
+   206→   206→- Modifier sa description.
+   207→   207→- Renommer un chapitre.
+   208→   208→- Modifier la description d'un chapitre.
+   209→   209→- Réorganiser l'ordre des chapitres.
+   210→   210→- Déplacer un chapitre vers une autre matière.
+   211→   211→- Supprimer une matière.
+   212→   212→- Supprimer un chapitre.
+   213→   213→
+   214→   214→Toute suppression doit être précédée d'une confirmation lorsque des données associées risquent d'être affectées.
+   215→   215→
+   216→   216→Avant de supprimer une matière, vérifier si elle contient des chapitres, des documents, des résumés, des conversations ou des exercices associés.
+   217→   217→
+   218→   218→Avant de supprimer un chapitre, vérifier s'il contient des documents et des données pédagogiques liées.
+   219→   219→
+   220→   220→Ne supprime pas silencieusement les fichiers originaux, les résultats ou les autres données associées.
+   221→   221→
+   222→   222→Lorsqu'une suppression peut entraîner une perte de données, présenter clairement les conséquences et proposer une solution adaptée.
+   223→   223→
+   224→   224→Si cela est nécessaire, permettre de déplacer les documents vers une autre matière ou un autre chapitre avant la suppression.
+   225→   225→
+   226→   226→Les règles de suppression doivent être appliquées de façon cohérente dans l'interface et dans la couche de persistance.
+   227→   227→
+   228→   228→---
+   229→   229→
+   230→   230→## 5. SÉPARER STRICTEMENT LES DOCUMENTS DES MATIÈRES ET DES CHAPITRES
+   231→   231→
+   232→   232→Le nom d'un document, celui d'une matière et celui d'un chapitre représentent trois informations différentes.
+   233→   233→
+   234→   234→Ils ne doivent jamais être confondus.
+   235→   235→
+   236→   236→### 5.1. Identité du document
+   237→   237→
+   238→   238→Chaque document importé doit posséder au minimum :
+   239→   239→
+   240→   240→- Un identifiant unique.
+   241→   241→- Le nom original du fichier.
+   242→   242→- Un titre d'affichage éventuellement modifiable.
+   243→   243→- Le type de fichier.
+   244→   244→- La taille du fichier.
+   245→   245→- La date d'importation.
+   246→   246→- Son emplacement principal dans la hiérarchie.
+   247→   247→- Son état de traitement.
+   248→   248→- Ses métadonnées d'analyse lorsque disponibles.
+   249→   249→
+   250→   250→Le nom du fichier original doit être conservé séparément du titre d'affichage.
+   251→   251→
+   252→   252→Par exemple :
+   253→   253→
+   254→   254→- Nom original : `Chapitre_03_SQL.pdf`
+   255→   255→- Titre d'affichage : `Introduction aux requêtes SQL`
+   256→   256→- Matière : `Bases de données`
+   257→   257→- Chapitre : `SQL`
+   258→   258→
+   259→   259→Ces quatre informations doivent rester indépendantes.
+   260→   260→
+   261→   261→### 5.2. Ne jamais déduire automatiquement une matière du nom du fichier
+   262→   262→
+   263→   263→L'importation d'un fichier appelé `Java.pdf` ne doit pas créer automatiquement une matière appelée « Java ».
+   264→   264→
+   265→   265→De même, l'importation d'un fichier appelé `Chapitre_1.pdf` ne doit pas créer automatiquement un chapitre.
+   266→   266→
+   267→   267→L'utilisateur doit pouvoir choisir où ranger le document.
+   268→   268→
+   269→   269→L'IA peut suggérer une matière ou un chapitre en analysant le contenu, mais cette suggestion doit être distincte d'une association effectivement enregistrée.
+   270→   270→
+   271→   271→Si aucune matière n'existe encore, proposer de la créer explicitement.
+   272→   272→
+   273→   273→Ne transforme jamais une suggestion de classement en création automatique silencieuse.
+   274→   274→
+   275→   275→### 5.3. Un document doit pouvoir être renommé indépendamment
+   276→   276→
+   277→   277→Modifier le titre d'affichage d'un document ne doit pas renommer sa matière ou son chapitre.
+   278→   278→
+   279→   279→Renommer une matière ne doit pas renommer les fichiers qu'elle contient.
+   280→   280→
+   281→   281→Renommer un chapitre ne doit pas modifier le nom original des documents associés.
+   282→   282→
+   283→   283→Chaque action doit modifier uniquement les informations concernées.
+   284→   284→
+   285→   285→### 5.4. Emplacement principal et réutilisation des sources
+   286→   286→
+   287→   287→Pour garder une organisation simple, chaque document doit avoir un emplacement principal clairement identifié dans la hiérarchie.
+   288→   288→
+   289→   289→Si le projet permet déjà d'associer un même document à plusieurs groupes de travail, conserve cette capacité lorsqu'elle est fonctionnelle.
+   290→   290→
+   291→   291→Dans ce cas, distingue :
+   292→   292→
+   293→   293→- L'emplacement principal du document.
+   294→   294→- Ses éventuelles associations secondaires.
+   295→   295→- Les sélections temporaires de documents pour une session d'étude.
+   296→   296→
+   297→   297→Ne crée pas plusieurs copies physiques d'un même fichier simplement parce qu'il est utilisé dans plusieurs contextes.
+   298→   298→
+   299→   299→Si une fonctionnalité d'association secondaire n'existe pas encore et n'est pas nécessaire, ne complexifie pas inutilement la première version.
+   300→   300→
+   301→   301→---
+   302→   302→
+   303→   303→## 6. CRÉER UN PARCOURS D'AJOUT DE COURS CLAIR
+   304→   304→
+   305→   305→Le processus actuel d'ajout de cours doit être examiné et simplifié.
+   306→   306→
+   307→   307→L'objectif est d'éviter les formulaires désordonnés, les associations incorrectes, les créations involontaires et les opérations qui se contredisent.
+   308→   308→
+   309→   309→### 6.1. Parcours de création recommandé
+   310→   310→
+   311→   311→Lorsque l'utilisateur souhaite organiser un nouveau cours, proposer un parcours guidé.
+   312→   312→
+   313→   313→**Étape 1 — Choisir la matière**
+   314→   314→
+   315→   315→Afficher les matières existantes et proposer une action distincte pour en créer une nouvelle.
+   316→   316→
+   317→   317→Si l'utilisateur choisit une matière existante, ne pas en créer une autre automatiquement.
+   318→   318→
+   319→   319→**Étape 2 — Choisir ou créer le chapitre**
+   320→   320→
+   321→   321→Afficher uniquement les chapitres appartenant à la matière sélectionnée.
+   322→   322→
+   323→   323→Permettre de choisir un chapitre existant ou d'en créer un nouveau dans cette matière.
+   324→   324→
+   325→   325→Ne pas afficher comme choix principal les chapitres appartenant à d'autres matières.
+   326→   326→
+   327→   327→**Étape 3 — Ajouter les documents**
+   328→   328→
+   329→   329→Permettre d'importer un ou plusieurs fichiers.
+   330→   330→
+   331→   331→Afficher la liste des fichiers sélectionnés avant validation.
+   332→   332→
+   333→   333→Pour chaque fichier, présenter :
+   334→   334→
+   335→   335→- Le nom original.
+   336→   336→- Le type.
+   337→   337→- La taille.
+   338→   338→- Le statut de validation.
+   339→   339→- L'emplacement choisi.
+   340→   340→
+   341→   341→Permettre de retirer un fichier de la sélection avant l'importation.
+   342→   342→
+   343→   343→**Étape 4 — Vérifier le classement**
+   344→   344→
+   345→   345→Présenter un récapitulatif clair :
+   346→   346→
+   347→   347→- Matière sélectionnée.
+   348→   348→- Chapitre sélectionné.
+   349→   349→- Documents à importer.
+   350→   350→
+   351→   351→Permettre de revenir aux étapes précédentes sans perdre les informations saisies.
+   352→   352→
+   353→   353→**Étape 5 — Enregistrer et traiter**
+   354→   354→
+   355→   355→Après validation, enregistrer les documents et leurs associations de manière cohérente.
+   356→   356→
+   357→   357→Déclencher ensuite l'extraction et l'analyse documentaire selon les fonctionnalités existantes.
+   358→   358→
+   359→   359→Le processus doit afficher son état et permettre de retrouver les documents même si l'analyse n'est pas encore terminée.
+   360→   360→
+   361→   361→### 6.2. Ajouter des documents à un cours existant
+   362→   362→
+   363→   363→Prévoir une action claire permettant d'ajouter des documents à un chapitre existant.
+   364→   364→
+   365→   365→Ce parcours ne doit pas obliger l'utilisateur à recréer la matière ou le chapitre.
+   366→   366→
+   367→   367→L'ajout doit simplement compléter le contenu existant.
+   368→   368→
+   369→   369→Il ne doit pas :
+   370→   370→
+   371→   371→- Dupliquer la matière.
+   372→   372→- Recréer le chapitre.
+   373→   373→- Réinitialiser les documents précédents.
+   374→   374→- Supprimer les analyses existantes.
+   375→   375→- Relancer inutilement le traitement de toute la matière.
+   376→   376→
+   377→   377→Seuls les nouveaux documents doivent être importés et traités.
+   378→   378→
+   379→   379→### 6.3. Validation et erreurs
+   380→   380→
+   381→   381→Empêcher l'enregistrement lorsque les informations indispensables sont absentes.
+   382→   382→
+   383→   383→Afficher des erreurs précises lorsque :
+   384→   384→
+   385→   385→- Aucune matière n'est sélectionnée.
+   386→   386→- Aucun chapitre n'est sélectionné alors qu'il est obligatoire.
+   387→   387→- Le chapitre ne correspond pas à la matière choisie.
+   388→   388→- Un fichier possède un format non pris en charge.
+   389→   389→- Un fichier est invalide.
+   390→   390→- L'importation échoue.
+   391→   391→- Une association ne peut pas être enregistrée.
+   392→   392→
+   393→   393→En cas d'échec, conserver autant que possible les données déjà saisies.
+   394→   394→
+   395→   395→Ne vide pas tout le formulaire après une erreur qui ne nécessite pas une remise à zéro.
+   396→   396→
+   397→   397→---
+   398→   398→
+   399→   399→## 7. REVOIR LA NAVIGATION ET LES FILTRES
+   400→   400→
+   401→   401→La navigation doit refléter la structure réelle des cours.
+   402→   402→
+   403→   403→### 7.1. Navigation principale
+   404→   404→
+   405→   405→La bibliothèque des cours doit permettre de parcourir naturellement :
+   406→   406→
+   407→   407→1. Les matières.
+   408→   408→2. Les chapitres d'une matière.
+   409→   409→3. Les documents d'un chapitre.
+   410→   410→
+   411→   411→L'utilisateur doit comprendre à tout moment où il se trouve.
+   412→   412→
+   413→   413→Afficher un chemin de navigation lorsque cela améliore la compréhension.
+   414→   414→
+   415→   415→Exemple :
+   416→   416→
+   417→   417→`Mes cours > Bases de données > SQL > Cours_SQL.pdf`
+   418→   418→
+   419→   419→Chaque niveau du chemin doit permettre de revenir à l'écran correspondant.
+   420→   420→
+   421→   421→### 7.2. Rôle des filtres
+   422→   422→
+   423→   423→Le filtre par matière peut être conservé lorsqu'il est utile, notamment dans une bibliothèque générale de documents.
+   424→   424→
+   425→   425→Cependant, il ne doit pas remplacer l'organisation hiérarchique.
+   426→   426→
+   427→   427→Les filtres doivent affiner une liste existante, et non déterminer implicitement la création ou la structure des cours.
+   428→   428→
+   429→   429→Ne crée jamais une matière ou un chapitre simplement parce qu'un filtre est sélectionné.
+   430→   430→
+   431→   431→### 7.3. Cohérence de l'affichage
+   432→   432→
+   433→   433→Lorsqu'une matière est sélectionnée, afficher uniquement les chapitres et documents qui lui sont associés.
+   434→   434→
+   435→   435→Lorsqu'un chapitre est sélectionné, afficher uniquement les documents qui lui appartiennent.
+   436→   436→
+   437→   437→Lorsque l'utilisateur revient à la bibliothèque générale, restaurer un état cohérent sans afficher des documents provenant d'un contexte incompatible.
+   438→   438→
+   439→   439→Les filtres, la recherche et la navigation doivent utiliser les mêmes règles d'association.
+   440→   440→
+   441→   441→### 7.4. Changement de contexte
+   442→   442→
+   443→   443→Si l'utilisateur change de matière alors qu'un formulaire de création de chapitre est ouvert, vérifier que le chapitre en cours de création reste cohérent avec la nouvelle matière.
+   444→   444→
+   445→   445→Ne conserve pas silencieusement une sélection de chapitre devenue invalide.
+   446→   446→
+   447→   447→Si le changement de contexte risque de modifier des données saisies, avertir l'utilisateur lorsque cela est nécessaire et lui permettre de conserver ou d'abandonner ses modifications.
+   448→   448→
+   449→   449→---
+   450→   450→
+   451→   451→## 8. CORRIGER LA PERTE D'ÉTAT LORS DES CHANGEMENTS DE FENÊTRE
+   452→   452→
+   453→   453→Un problème important concerne les informations, les sélections et les processus qui disparaissent lorsque l'utilisateur change de page, de fenêtre ou de section de l'application.
+   454→   454→
+   455→   455→Tu dois examiner précisément ces comportements et déterminer leur cause.
+   456→   456→
+   457→   457→Il faut distinguer trois catégories d'état.
+   458→   458→
+   459→   459→### 8.1. État temporaire de l'interface
+   460→   460→
+   461→   461→Il comprend notamment :
+   462→   462→
+   463→   463→- Le panneau actuellement ouvert.
+   464→   464→- L'onglet actif.
+   465→   465→- La position dans une page.
+   466→   466→- Les filtres temporaires.
+   467→   467→- L'ouverture ou la fermeture d'une fenêtre modale.
+   468→   468→
+   469→   469→Cet état peut rester temporaire, mais il ne doit pas être réinitialisé sans raison à chaque changement de vue.
+   470→   470→
+   471→   471→Lorsque cela améliore l'expérience, conserver la dernière sélection pendant la navigation.
+   472→   472→
+   473→   473→### 8.2. État de travail et brouillons
+   474→   474→
+   475→   475→Il comprend :
+   476→   476→
+   477→   477→- Les champs remplis dans un formulaire.
+   478→   478→- Les documents sélectionnés avant validation.
+   479→   479→- Les paramètres de génération d'un exercice.
+   480→   480→- Les messages en cours de rédaction.
+   481→   481→- Le code saisi dans l'éditeur.
+   482→   482→- Les réponses à un exercice en cours.
+   483→   483→- Les modifications non encore enregistrées.
+   484→   484→- Les options choisies pour un résumé.
+   485→   485→
+   486→   486→Ces informations doivent être conservées pendant les changements de vue et les opérations de navigation, dans la mesure où le parcours utilisateur suppose de pouvoir reprendre le travail.
+   487→   487→
+   488→   488→Mettre en place une sauvegarde automatique des brouillons lorsque cela est pertinent.
+   489→   489→
+   490→   490→Utiliser un mécanisme adapté au type de données : état applicatif partagé, stockage local ou persistance en base de données.
+   491→   491→
+   492→   492→Ne considère pas qu'un simple état conservé dans un composant suffit si ce composant est détruit à chaque navigation.
+   493→   493→
+   494→   494→### 8.3. État des opérations en cours
+   495→   495→
+   496→   496→Il comprend :
+   497→   497→
+   498→   498→- L'importation de fichiers.
+   499→   499→- L'extraction du texte.
+   500→   500→- L'analyse IA.
+   501→   501→- La génération d'un résumé.
+   502→   502→- La génération d'exercices.
+   503→   503→- La correction d'une réponse.
+   504→   504→- L'enregistrement des résultats.
+   505→   505→- Les opérations de sauvegarde.
+   506→   506→
+   507→   507→Ces opérations ne doivent pas dépendre uniquement de la présence du composant visuel qui les a lancées.
+   508→   508→
+   509→   509→Si l'utilisateur change de page, l'opération doit continuer lorsque cela est techniquement possible.
+   510→   510→
+   511→   511→Son état doit rester consultable depuis l'interface appropriée.
+   512→   512→
+   513→   513→### 8.4. Ne pas réinitialiser une opération en cours
+   514→   514→
+   515→   515→Si l'utilisateur lance l'analyse d'un document puis ouvre une autre fenêtre, le traitement ne doit pas repartir de zéro simplement parce que l'écran a changé.
+   516→   516→
+   517→   517→À son retour, il doit pouvoir consulter le statut réel de l'opération.
+   518→   518→
+   519→   519→Prévoir des états explicites, tels que :
+   520→   520→
+   521→   521→- En attente.
+   522→   522→- En cours.
+   523→   523→- Terminé.
+   524→   524→- Échec.
+   525→   525→- Annulé.
+   526→   526→
+   527→   527→Une opération ne doit pas être déclarée terminée tant que le résultat n'a pas été correctement enregistré.
+   528→   528→
+   529→   529→En cas d'échec, permettre de réessayer sans créer des doublons ni perdre les données déjà traitées.
+   530→   530→
+   531→   531→### 8.5. Persistance des opérations
+   532→   532→
+   533→   533→Pour les traitements importants, enregistrer les informations nécessaires à leur suivi dans une couche persistante.
+   534→   534→
+   535→   535→Le suivi doit être indépendant du composant d'interface.
+   536→   536→
+   537→   537→Lorsque l'application est fermée puis relancée, elle doit pouvoir retrouver les opérations persistées et déterminer leur véritable état.
+   538→   538→
+   539→   539→Ne marque pas automatiquement toutes les opérations interrompues comme terminées.
+   540→   540→
+   541→   541→Si une opération était en cours au moment de l'arrêt, appliquer une stratégie de reprise ou de réconciliation adaptée à sa nature.
+   542→   542→
+   543→   543→Ne relance pas automatiquement une opération coûteuse sans vérifier si elle peut être reprise ou si son résultat existe déjà.
+   544→   544→
+   545→   545→### 8.6. Navigation et soumission
+   546→   546→
+   547→   547→Éviter qu'un changement de route entraîne involontairement :
+   548→   548→
+   549→   549→- La suppression d'un brouillon.
+   550→   550→- La remise à zéro d'un formulaire.
+   551→   551→- La perte du code saisi.
+   552→   552→- La perte d'une réponse.
+   553→   553→- Le lancement d'une deuxième génération.
+   554→   554→- La création de plusieurs documents identiques.
+   555→   555→- La perte de la sélection des sources.
+   556→   556→
+   557→   557→Un changement de page ne doit pas être interprété comme une annulation explicite.
+   558→   558→
+   559→   559→L'annulation doit résulter d'une action claire de l'utilisateur ou d'une nécessité technique réelle.
+   560→   560→
+   561→   561→---
+   562→   562→
+   563→   563→## 9. ASSURER LA COHÉRENCE DES DONNÉES
+   564→   564→
+   565→   565→Examine la structure de persistance existante et corrige les relations incohérentes.
+   566→   566→
+   567→   567→Le système doit distinguer au minimum :
+   568→   568→
+   569→   569→- Les matières.
+   570→   570→- Les chapitres.
+   571→   571→- Les documents.
+   572→   572→- Les métadonnées des documents.
+   573→   573→- Les contenus extraits.
+   574→   574→- Les analyses documentaires.
+   575→   575→- Les résumés.
+   576→   576→- Les conversations.
+   577→   577→- Les exercices.
+   578→   578→- Les tentatives.
+   579→   579→- Les réponses.
+   580→   580→- Les corrections.
+   581→   581→- Les résultats.
+   582→   582→- Les opérations en cours.
+   583→   583→
+   584→   584→Adapte cette structure à l'architecture existante plutôt que de créer inutilement plusieurs modèles représentant la même information.
+   585→   585→
+   586→   586→### 9.1. Relations
+   587→   587→
+   588→   588→Chaque chapitre doit référencer une matière valide.
+   589→   589→
+   590→   590→Chaque document doit référencer un emplacement valide selon les règles retenues.
+   591→   591→
+   592→   592→Chaque résultat doit être associé à la bonne tentative.
+   593→   593→
+   594→   594→Chaque analyse doit correspondre au document ou à la version du contenu qui a réellement été analysé.
+   595→   595→
+   596→   596→### 9.2. Enregistrements cohérents
+   597→   597→
+   598→   598→Les opérations de création et de déplacement doivent préserver la cohérence des relations.
+   599→   599→
+   600→   600→Si une opération implique plusieurs modifications dépendantes, utiliser une transaction ou un mécanisme équivalent lorsque la technologie le permet.
+   601→   601→
+   602→   602→Éviter les situations où une matière est créée mais son chapitre échoue silencieusement, ou où un document apparaît dans l'interface sans association valide dans la base de données.
+   603→   603→
+   604→   604→### 9.3. Migrations et données existantes
+   605→   605→
+   606→   606→Avant toute modification du schéma de données :
+   607→   607→
+   608→   608→1. Examiner les modèles actuels.
+   609→   609→2. Identifier les données déjà enregistrées.
+   610→   610→3. Déterminer les relations existantes.
+   611→   611→4. Prévoir une migration compatible.
+   612→   612→5. Préserver les données utiles.
+   613→   613→6. Vérifier les nouvelles contraintes.
+   614→   614→
+   615→   615→Ne supprime pas la base de données pour repartir de zéro.
+   616→   616→
+   617→   617→Ne supprime pas les matières, chapitres, documents ou résultats existants simplement pour simplifier la migration.
+   618→   618→
+   619→   619→Si des documents sont déjà mal classés, prévoir une méthode de correction qui permette de les rattacher à la bonne matière et au bon chapitre.
+   620→   620→
+   621→   621→Lorsqu'une association existante est ambiguë, ne devine pas silencieusement la destination.
+   622→   622→
+   623→   623→Conserve les données et signale les éléments nécessitant une vérification.
+   624→   624→
+   625→   625→---
+   626→   626→
+   627→   627→## 10. AMÉLIORER LA LOGIQUE DES TRAITEMENTS IA
+   628→   628→
+   629→   629→La correction de la structure documentaire doit se répercuter sur les fonctionnalités d'intelligence artificielle.
+   630→   630→
+   631→   631→### 10.1. Sélection des sources
+   632→   632→
+   633→   633→Pour chaque opération, l'utilisateur doit pouvoir sélectionner clairement son périmètre :
+   634→   634→
+   635→   635→- Un document.
+   636→   636→- Plusieurs documents.
+   637→   637→- Un chapitre.
+   638→   638→- Une matière.
+   639→   639→- Une sélection personnalisée.
+   640→   640→
+   641→   641→L'application doit traduire ce choix en une liste précise de documents sources.
+   642→   642→
+   643→   643→Ne déduis pas les sources à partir du nom d'une matière ou d'un chapitre.
+   644→   644→
+   645→   645→### 10.2. Résumés
+   646→   646→
+   647→   647→Lorsqu'un résumé est demandé pour un chapitre, utiliser les documents associés à ce chapitre, sauf si l'utilisateur choisit explicitement d'autres sources.
+   648→   648→
+   649→   649→Lorsqu'un résumé est demandé pour une matière entière, utiliser les documents des chapitres concernés.
+   650→   650→
+   651→   651→Permettre de sélectionner le niveau de détail et de produire un plan de cours navigable.
+   652→   652→
+   653→   653→Les résumés doivent être sauvegardés indépendamment des documents originaux.
+   654→   654→
+   655→   655→L'ajout d'un nouveau document ne doit pas effacer les résumés déjà créés.
+   656→   656→
+   657→   657→Si un résumé devient potentiellement obsolète après une modification du cours, signaler cette situation plutôt que de le remplacer silencieusement.
+   658→   658→
+   659→   659→### 10.3. Chat documentaire
+   660→   660→
+   661→   661→Le chat doit respecter les documents sélectionnés.
+   662→   662→
+   663→   663→Une conversation associée à un chapitre ne doit pas changer de contexte sans raison lorsque l'utilisateur navigue ailleurs.
+   664→   664→
+   665→   665→Conserver la conversation, les messages et les sources utilisées.
+   666→   666→
+   667→   667→Si l'utilisateur change explicitement les sources, refléter ce changement dans l'interface.
+   668→   668→
+   669→   669→Ne pas mélanger silencieusement des documents de matières différentes.
+   670→   670→
+   671→   671→### 10.4. Génération d'exercices
+   672→   672→
+   673→   673→Lors de la création d'un exercice, utiliser les sources correspondant à la sélection explicite.
+   674→   674→
+   675→   675→Afficher les documents utilisés lorsque cela est utile.
+   676→   676→
+   677→   677→Ne génère pas automatiquement des exercices à partir de toute la bibliothèque si l'utilisateur a sélectionné un chapitre précis.
+   678→   678→
+   679→   679→Conserver les paramètres de génération et les résultats obtenus.
+   680→   680→
+   681→   681→### 10.5. Ajout de nouveaux documents
+   682→   682→
+   683→   683→Lorsqu'un document est ajouté à un chapitre, traiter uniquement les données qui nécessitent réellement un nouveau traitement.
+   684→   684→
+   685→   685→Réutiliser les analyses existantes lorsqu'elles restent valides.
+   686→   686→
+   687→   687→Ne relance pas systématiquement l'analyse complète de toutes les matières.
+   688→   688→
+   689→   689→---
+   690→   690→
+   691→   691→## 11. CONSERVER LE COMPORTEMENT DE L'ÉDITEUR DE CODE ET DE LA CORRECTION
+   692→   692→
+   693→   693→La plateforme doit continuer à proposer les fonctionnalités pédagogiques déjà prévues.
+   694→   694→
+   695→   695→Cependant, la correction du code doit respecter la nouvelle exigence :
+   696→   696→
+   697→   697→**Le code soumis doit être analysé sans compilation ni exécution.**
+   698→   698→
+   699→   699→Conserver ou implémenter :
+   700→   700→
+   701→   701→- La coloration syntaxique.
+   702→   702→- L'indentation.
+   703→   703→- La numérotation des lignes.
+   704→   704→- La sauvegarde des brouillons.
+   705→   705→- La sélection du langage.
+   706→   706→- La soumission des réponses.
+   707→   707→- L'analyse statique par IA.
+   708→   708→- La détection des erreurs probables.
+   709→   709→- La vérification de la cohérence logique.
+   710→   710→- La correction pédagogique.
+   711→   711→- La notation.
+   712→   712→- L'historique des tentatives.
+   713→   713→
+   714→   714→L'IA doit distinguer les erreurs détectables, les problèmes probables et les points impossibles à confirmer sans exécution.
+   715→   715→
+   716→   716→Ne prétends jamais qu'un code a été exécuté ou compilé si ce n'est pas le cas.
+   717→   717→
+   718→   718→Pour SQL, appliquer également une analyse sans exécution : syntaxe, structure, logique, relations et conformité à la consigne, selon les informations disponibles.
+   719→   719→
+   720→   720→Ne supprime pas l'éditeur de code ni les exercices SQL sous prétexte de supprimer l'exécution.
+   721→   721→
+   722→   722→---
+   723→   723→
+   724→   724→## 12. PRÉSERVER LES FONCTIONNALITÉS EXISTANTES
+   725→   725→
+   726→   726→Avant de modifier un module, identifie les fonctionnalités qui en dépendent.
+   727→   727→
+   728→   728→Une correction de la gestion des cours ne doit pas casser :
+   729→   729→
+   730→   730→- L'importation de documents.
+   731→   731→- La prévisualisation.
+   732→   732→- L'extraction du texte.
+   733→   733→- L'analyse IA.
+   734→   734→- Les résumés.
+   735→   735→- Le chat.
+   736→   736→- La génération d'exercices.
+   737→   737→- Les réponses aux exercices.
+   738→   738→- La correction.
+   739→   739→- La notation.
+   740→   740→- L'historique.
+   741→   741→- Le tableau de bord.
+   742→   742→- Les paramètres.
+   743→   743→- La sauvegarde.
+   744→   744→
+   745→   745→Si une modification structurelle impose d'adapter plusieurs modules, effectue les adaptations nécessaires dans l'ensemble du projet.
+   746→   746→
+   747→   747→Ne laisse pas une page utiliser l'ancien modèle de données pendant qu'une autre utilise le nouveau.
+   748→   748→
+   749→   749→Évite les corrections locales qui masquent le problème sans résoudre sa cause.
+   750→   750→
+   751→   751→---
+   752→   752→
+   753→   753→## 13. TESTS OBLIGATOIRES
+   754→   754→
+   755→   755→Créer ou adapter des tests pour vérifier le comportement réel de l'application.
+   756→   756→
+   757→   757→Les tests doivent couvrir les cas normaux, les erreurs et les changements de contexte.
+   758→   758→
+   759→   759→### A. Matières
+   760→   760→
+   761→   761→- Créer une matière.
+   762→   762→- Modifier son nom.
+   763→   763→- Créer plusieurs matières.
+   764→   764→- Vérifier la gestion des doublons.
+   765→   765→- Vérifier que les matières sont conservées après redémarrage.
+   766→   766→- Supprimer une matière contenant des données associées.
+   767→   767→- Vérifier que les conséquences de la suppression sont maîtrisées.
+   768→   768→
+   769→   769→### B. Chapitres
+   770→   770→
+   771→   771→- Créer un chapitre dans une matière.
+   772→   772→- Créer plusieurs chapitres dans la même matière.
+   773→   773→- Créer deux chapitres portant le même nom dans deux matières différentes.
+   774→   774→- Vérifier qu'un chapitre ne peut pas être associé à une matière inexistante.
+   775→   775→- Déplacer un chapitre vers une autre matière.
+   776→   776→- Vérifier que les documents restent cohérents après le déplacement.
+   777→   777→
+   778→   778→### C. Documents
+   779→   779→
+   780→   780→- Importer plusieurs fichiers dans un même chapitre.
+   781→   781→- Ajouter un document à un chapitre existant.
+   782→   782→- Vérifier que les noms des fichiers restent indépendants des noms des matières et des chapitres.
+   783→   783→- Renommer un document sans renommer sa matière.
+   784→   784→- Déplacer un document vers un autre chapitre.
+   785→   785→- Vérifier que les documents précédents restent présents.
+   786→   786→- Vérifier que les doublons sont gérés correctement.
+   787→   787→- Vérifier que les erreurs d'importation ne provoquent pas de pertes de données.
+   788→   788→
+   789→   789→### D. Navigation et filtres
+   790→   790→
+   791→   791→- Ouvrir une matière.
+   792→   792→- Consulter ses chapitres.
+   793→   793→- Ouvrir un chapitre.
+   794→   794→- Consulter ses documents.
+   795→   795→- Revenir à la matière.
+   796→   796→- Utiliser un filtre.
+   797→   797→- Effacer le filtre.
+   798→   798→- Vérifier que les données affichées restent cohérentes.
+   799→   799→
+   800→   800→### E. Conservation de l'état
+   801→   801→
+   802→   802→- Remplir un formulaire.
+   803→   803→- Changer de page.
+   804→   804→- Revenir au formulaire.
+   805→   805→- Vérifier que les informations sont conservées selon le comportement attendu.
+   806→   806→- Sélectionner des documents pour une génération.
+   807→   807→- Changer de fenêtre.
+   808→   808→- Vérifier que la sélection est conservée.
+   809→   809→- Écrire du code dans un exercice.
+   810→   810→- Naviguer ailleurs.
+   811→   811→- Revenir et vérifier que le brouillon est conservé.
+   812→   812→- Lancer une analyse IA.
+   813→   813→- Changer de page pendant le traitement.
+   814→   814→- Vérifier que l'opération continue ou peut être reprise correctement.
+   815→   815→- Relancer l'application pendant qu'une opération est en cours.
+   816→   816→- Vérifier que son état est correctement réconcilié.
+   817→   817→
+   818→   818→### F. Cohérence et absence de doublons
+   819→   819→
+   820→   820→- Double-cliquer sur une action de création.
+   821→   821→- Simuler une erreur pendant l'enregistrement.
+   822→   822→- Réessayer une opération échouée.
+   823→   823→- Vérifier qu'aucun document ou chapitre identique n'est créé involontairement.
+   824→   824→- Vérifier qu'une opération terminée n'est pas relancée sans nécessité.
+   825→   825→
+   826→   826→### G. Non-régression
+   827→   827→
+   828→   828→Vérifier que les résumés, le chat, les exercices, les corrections et l'historique fonctionnent toujours après les modifications.
+   829→   829→
+   830→   830→Ne te contente pas de vérifier que le projet démarre.
+   831→   831→
+   832→   832→Teste les principaux parcours utilisateur de bout en bout.
+   833→   833→
+   834→   834→Corrige les problèmes découverts avant de déclarer le travail terminé.
+   835→   835→
+   836→   836→Ne prétends jamais avoir exécuté un test que tu n'as pas réellement lancé.
+   837→   837→
+   838→   838→---
+   839→   839→
+   840→   840→## 14. MÉTHODE DE TRAVAIL
+   841→   841→
+   842→   842→Travaille dans cet ordre.
+   843→   843→
+   844→   844→### Phase 1 — Audit
+   845→   845→
+   846→   846→Examine le projet existant et identifie les problèmes.
+   847→   847→
+   848→   848→### Phase 2 — Diagnostic
+   849→   849→
+   850→   850→Détermine les causes des incohérences et des pertes d'état.
+   851→   851→
+   852→   852→### Phase 3 — Modèle de données
+   853→   853→
+   854→   854→Vérifie et corrige les relations entre les matières, les chapitres et les documents.
+   855→   855→
+   856→   856→Prépare les migrations nécessaires sans supprimer les données existantes.
+   857→   857→
+   858→   858→### Phase 4 — Gestion des cours
+   859→   859→
+   860→   860→Corrige les formulaires, les parcours de création, les associations et la navigation.
+   861→   861→
+   862→   862→### Phase 5 — Gestion de l'état
+   863→   863→
+   864→   864→Corrige les réinitialisations intempestives et la conservation des opérations en cours.
+   865→   865→
+   866→   866→### Phase 6 — Intégration
+   867→   867→
+   868→   868→Vérifie que les résumés, le chat, les exercices et les autres fonctionnalités utilisent correctement la structure documentaire.
+   869→   869→
+   870→   870→### Phase 7 — Tests
+   871→   871→
+   872→   872→Exécute les tests disponibles, ajoute ceux qui manquent et corrige les régressions.
+   873→   873→
+   874→   874→### Phase 8 — Livraison
+   875→   875→
+   876→   876→Présente un bilan précis des modifications effectuées.
+   877→   877→
+   878→   878→Si tu disposes d'un terminal, utilise-le pour exécuter les commandes, les migrations et les tests nécessaires.
+   879→   879→
+   880→   880→Si tu disposes d'un environnement permettant de modifier directement le projet, applique les modifications dans les fichiers existants.
+   881→   881→
+   882→   882→Ne me demande pas de réaliser manuellement les corrections que tu peux effectuer toi-même.
+   883→   883→
+   884→   884→Si une contrainte technique bloque une partie du travail, termine les autres corrections possibles et indique précisément ce qui reste à faire.
+   885→   885→
+   886→   886→---
+   887→   887→
+   888→   888→## 15. CONDITIONS DE VALIDATION FINALE
+   889→   889→
+   890→   890→Le travail ne sera considéré comme terminé que si :
+   891→   891→
+   892→   892→- Le design existant a été préservé.
+   893→   893→- La hiérarchie Matière → Chapitres → Documents est cohérente.
+   894→   894→- Les matières et les chapitres peuvent être créés et modifiés correctement.
+   895→   895→- Plusieurs documents peuvent être ajoutés à un même chapitre.
+   896→   896→- Le nom du document est indépendant de celui de la matière et du chapitre.
+   897→   897→- L'importation ne crée pas de nouvelles matières ou de nouveaux chapitres sans action explicite.
+   898→   898→- Les filtres ne remplacent pas la hiérarchie documentaire.
+   899→   899→- Les formulaires d'ajout sont clairs et cohérents.
+   900→   900→- Les associations incorrectes sont empêchées.
+   901→   901→- Les brouillons ne disparaissent pas lors des changements de vue lorsque leur conservation est attendue.
+   902→   902→- Les opérations importantes ne sont pas réinitialisées inutilement.
+   903→   903→- Les traitements IA peuvent être suivis et repris selon leur état réel.
+   904→   904→- Les données restent cohérentes après redémarrage.
+   905→   905→- Les données existantes ont été préservées.
+   906→   906→- Les résumés, le chat et les exercices utilisent les bonnes sources.
+   907→   907→- Les principales fonctionnalités existantes continuent de fonctionner.
+   908→   908→- Les tests critiques ont été exécutés et leurs résultats sont documentés.
+   909→   909→- Les limitations restantes sont clairement indiquées.
+   910→   910→
+   911→   911→### Instruction finale
+   912→   912→
+   913→   913→**AUDITE, CORRIGE ET AMÉLIORE LA PLATEFORME STUDYFORGE AI EXISTANTE EN RESPECTANT STRICTEMENT CES EXIGENCES.**
+   914→   914→
+   915→   915→Ne reconstruis pas arbitrairement le projet.
+   916→   916→
+   917→   917→Ne change pas son identité visuelle sans nécessité.
+   918→   918→
+   919→   919→Ne te contente pas d'ajouter des boutons ou des écrans.
+   920→   920→
+   921→   921→Corrige les causes des problèmes, rétablis une logique de gestion cohérente et vérifie que les fonctionnalités sont réellement opérationnelles.
+   922→   922→
+   923→   923→Le résultat attendu est la version corrigée de la plateforme existante, avec une meilleure organisation des cours, une gestion fiable des documents, une navigation cohérente et une conservation correcte de l'état de travail.
+   924→   924→
+   925→   925→Commence par examiner le projet réel, puis effectue les modifications nécessaires jusqu'à obtenir un résultat fonctionnel et testé.

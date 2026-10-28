@@ -1,0 +1,662 @@
+     1→"use client";
+     2→
+     3→// ─────────────────────────────────────────────────────────────────────────────
+     4→// SqlLabView — Laboratoire SQL de StudyForge AI.
+     5→// - Chaque exécution crée une base SQLite EN MÉMOIRE isolée côté serveur
+     6→//   (la base applicative n'est jamais touchée).
+     7→// - Jeux de données (fixtures), introspection du schéma, résultats par
+     8→//   instruction, historique local de session (15 requêtes).
+     9→// - Raccourci clavier : Ctrl/Cmd + Entrée.
+    10→// ─────────────────────────────────────────────────────────────────────────────
+    11→
+    12→import { useCallback, useEffect, useMemo, useState } from "react";
+    13→import { api } from "@/lib/client-api";
+    14→import { Button } from "@/components/ui/button";
+    15→import { Badge } from "@/components/ui/badge";
+    16→import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+    17→import {
+    18→  AlertDialog,
+    19→  AlertDialogAction,
+    20→  AlertDialogCancel,
+    21→  AlertDialogContent,
+    22→  AlertDialogDescription,
+    23→  AlertDialogFooter,
+    24→  AlertDialogHeader,
+    25→  AlertDialogTitle,
+    26→  AlertDialogTrigger,
+    27→} from "@/components/ui/alert-dialog";
+    28→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+    29→import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+    30→import { Label } from "@/components/ui/label";
+    31→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    32→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+    33→import { cn } from "@/lib/utils";
+    34→import {
+    35→  CheckCircle2,
+    36→  ChevronDown,
+    37→  ChevronRight,
+    38→  Database,
+    39→  HelpCircle,
+    40→  Loader2,
+    41→  Play,
+    42→  RotateCcw,
+    43→  ShieldAlert,
+    44→  Table2,
+    45→  XCircle,
+    46→} from "lucide-react";
+    47→import CodeMirror from "@uiw/react-codemirror";
+    48→import { oneDark } from "@codemirror/theme-one-dark";
+    49→import { sql as sqlLanguage } from "@codemirror/lang-sql";
+    50→
+    51→// ── Types de l'API ───────────────────────────────────────────────────────────
+    52→
+    53→interface Fixture {
+    54→  id: string;
+    55→  label: string;
+    56→  description: string;
+    57→}
+    58→
+    59→type StatementKind = "select" | "write" | "ddl" | "pragma" | "other";
+    60→
+    61→interface SqlStatementResult {
+    62→  sql: string;
+    63→  kind: StatementKind;
+    64→  rows?: Record<string, unknown>[];
+    65→  columns?: string[];
+    66→  error?: string;
+    67→}
+    68→
+    69→interface SqlRunResponse {
+    70→  ok: boolean;
+    71→  statements: SqlStatementResult[];
+    72→  error?: string;
+    73→  durationMs: number;
+    74→}
+    75→
+    76→interface SchemaRow {
+    77→  table_name: string;
+    78→  column_name: string;
+    79→  type: string;
+    80→  pk: number;
+    81→}
+    82→
+    83→interface HistoryItem {
+    84→  id: string;
+    85→  sql: string;
+    86→  ok: boolean;
+    87→  at: Date;
+    88→}
+    89→
+    90→// ── Constantes ───────────────────────────────────────────────────────────────
+    91→
+    92→const DEFAULT_FIXTURE = "bibliotheque";
+    93→const INITIAL_SQL = `-- Écrivez vos requêtes SQL ici, puis Ctrl+Entrée pour exécuter.\nSELECT 1 AS essai;`;
+    94→const PLACEHOLDER_SQL = "-- Écrivez votre requête SQL ici…";
+    95→
+    96→const KIND_LABELS: Record<StatementKind, string> = {
+    97→  select: "SELECT",
+    98→  write: "écriture",
+    99→  ddl: "DDL",
+   100→  pragma: "PRAGMA",
+   101→  other: "autre",
+   102→};
+   103→
+   104→/** Introspection du schéma en une seule requête (fonction table pragma_table_info). */
+   105→const SCHEMA_QUERY =
+   106→  "SELECT m.name AS table_name, p.name AS column_name, p.type, p.pk " +
+   107→  "FROM sqlite_master m JOIN pragma_table_info(m.name) p " +
+   108→  "WHERE m.type='table' ORDER BY m.name;";
+   109→
+   110→const SQL_NOTIONS = [
+   111→  "SELECT, DISTINCT, alias",
+   112→  "WHERE, AND / OR, IN, LIKE",
+   113→  "ORDER BY, LIMIT, OFFSET",
+   114→  "GROUP BY, HAVING",
+   115→  "Jointures INNER / LEFT / CROSS",
+   116→  "Sous-requêtes, CTE (WITH)",
+   117→  "Agrégats COUNT, SUM, AVG, MIN, MAX",
+   118→  "CREATE TABLE, ALTER, DROP",
+   119→  "INSERT, UPDATE, DELETE",
+   120→  "Contraintes PK, FK, UNIQUE, CHECK",
+   121→  "Vues (CREATE VIEW)",
+   122→  "PRAGMA (lecture)",
+   123→];
+   124→
+   125→let uidCounter = 0;
+   126→function nextId(): string {
+   127→  uidCounter += 1;
+   128→  return `sql-${Date.now()}-${uidCounter}`;
+   129→}
+   130→
+   131→function truncate(s: string, n: number): string {
+   132→  return s.length > n ? `${s.slice(0, n)}…` : s;
+   133→}
+   134→
+   135→function formatValue(v: unknown): { text: string; isNull: boolean } {
+   136→  if (v === null || v === undefined) return { text: "NULL", isNull: true };
+   137→  if (typeof v === "object") {
+   138→    if (v instanceof Uint8Array) return { text: "<BLOB>", isNull: false };
+   139→    return { text: JSON.stringify(v), isNull: false };
+   140→  }
+   141→  return { text: String(v), isNull: false };
+   142→}
+   143→
+   144→/** Détecte le thème sombre (classe .dark sur <html>) sans dépendre d'un provider. */
+   145→function useIsDarkTheme(): boolean {
+   146→  const [isDark, setIsDark] = useState(false);
+   147→  useEffect(() => {
+   148→    const root = document.documentElement;
+   149→    const update = () => setIsDark(root.classList.contains("dark"));
+   150→    update();
+   151→    const observer = new MutationObserver(update);
+   152→    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+   153→    return () => observer.disconnect();
+   154→  }, []);
+   155→  return isDark;
+   156→}
+   157→
+   158→// ── Table de résultats pour une instruction SELECT ──────────────────────────
+   159→
+   160→function RowsTable({ rows, columns }: { rows: Record<string, unknown>[]; columns: string[] }) {
+   161→  const shown = rows.slice(0, 50);
+   162→  return (
+   163→    <div className="space-y-1.5">
+   164→      <div className="max-h-72 overflow-x-auto rounded-md border">
+   165→        <Table>
+   166→          <TableHeader>
+   167→            <TableRow className="hover:bg-transparent">
+   168→              {columns.map((c, i) => (
+   169→                <TableHead key={`${c}-${i}`} className="font-code text-[11.5px] whitespace-nowrap">
+   170→                  {c}
+   171→                </TableHead>
+   172→              ))}
+   173→            </TableRow>
+   174→          </TableHeader>
+   175→          <TableBody>
+   176→            {shown.map((row, ri) => (
+   177→              <TableRow key={ri}>
+   178→                {columns.map((c, ci) => {
+   179→                  const { text, isNull } = formatValue(row[c]);
+   180→                  return (
+   181→                    <TableCell key={`${c}-${ci}`} className="font-code max-w-[22rem] truncate text-[12px]">
+   182→                      {isNull ? <span className="italic text-muted-foreground">{text}</span> : text}
+   183→                    </TableCell>
+   184→                  );
+   185→                })}
+   186→              </TableRow>
+   187→            ))}
+   188→          </TableBody>
+   189→        </Table>
+   190→      </div>
+   191→      <p className="typo-meta tnum">
+   192→        {rows.length} ligne{rows.length > 1 ? "s" : ""}
+   193→        {rows.length > 50 ? " · 50 affichées" : ""}
+   194→      </p>
+   195→    </div>
+   196→  );
+   197→}
+   198→
+   199→// ── Résultat d'une instruction individuelle ─────────────────────────────────
+   200→
+   201→function StatementBlock({ st }: { st: SqlStatementResult }) {
+   202→  const columns = st.columns ?? (st.rows && st.rows.length > 0 ? Object.keys(st.rows[0]) : []);
+   203→  return (
+   204→    <div className="space-y-2 rounded-lg border p-3">
+   205→      <div className="flex flex-wrap items-center gap-2">
+   206→        <Badge variant="secondary" className="font-code px-1.5 py-0 text-[10px] uppercase">
+   207→          {KIND_LABELS[st.kind] ?? st.kind}
+   208→        </Badge>
+   209→        {(st.kind === "write" || st.kind === "ddl") && !st.error && (
+   210→          <Badge variant="outline" className="text-emerald-700 dark:text-emerald-400">
+   211→            OK — instruction exécutée
+   212→          </Badge>
+   213→        )}
+   214→        <span className="typo-meta min-w-0 flex-1 truncate font-code" title={st.sql}>
+   215→          {truncate(st.sql, 100)}
+   216→        </span>
+   217→      </div>
+   218→
+   219→      {st.error ? (
+   220→        <Alert variant="destructive">
+   221→          <XCircle aria-hidden />
+   222→          <AlertTitle>Erreur SQL</AlertTitle>
+   223→          <AlertDescription>{st.error}</AlertDescription>
+   224→        </Alert>
+   225→      ) : st.rows && st.rows.length > 0 ? (
+   226→        <RowsTable rows={st.rows} columns={columns} />
+   227→      ) : st.kind === "select" ? (
+   228→        <p className="typo-meta">Aucune ligne retournée.</p>
+   229→      ) : (
+   230→        <p className="typo-meta">Instruction exécutée sans jeu de résultats.</p>
+   231→      )}
+   232→    </div>
+   233→  );
+   234→}
+   235→
+   236→// ── Vue principale ───────────────────────────────────────────────────────────
+   237→
+   238→export default function SqlLabView() {
+   239→  const isDark = useIsDarkTheme();
+   240→
+   241→  // ── Fixtures ──
+   242→  const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
+   243→  const [fixturesError, setFixturesError] = useState<string | null>(null);
+   244→  const [fixture, setFixture] = useState<string>(DEFAULT_FIXTURE);
+   245→
+   246→  // ── Éditeur & exécution ──
+   247→  const [sql, setSql] = useState<string>(INITIAL_SQL);
+   248→  const [running, setRunning] = useState(false);
+   249→  const [result, setResult] = useState<SqlRunResponse | null>(null);
+   250→  const [runError, setRunError] = useState<string | null>(null);
+   251→
+   252→  // ── Schéma ──
+   253→  const [schemaRows, setSchemaRows] = useState<SchemaRow[] | null>(null);
+   254→  const [schemaLoading, setSchemaLoading] = useState(false);
+   255→  const [schemaError, setSchemaError] = useState<string | null>(null);
+   256→
+   257→  // ── Historique & aide ──
+   258→  const [history, setHistory] = useState<HistoryItem[]>([]);
+   259→  const [helpOpen, setHelpOpen] = useState(false);
+   260→
+   261→  // ── Chargement des jeux de données ──
+   262→  useEffect(() => {
+   263→    let cancelled = false;
+   264→    api
+   265→      .get<{ fixtures: Fixture[] }>("/api/sql/run")
+   266→      .then((res) => {
+   267→        if (cancelled) return;
+   268→        setFixtures(res.fixtures);
+   269→        if (res.fixtures.length > 0 && !res.fixtures.some((f) => f.id === DEFAULT_FIXTURE)) {
+   270→          setFixture(res.fixtures[0].id);
+   271→        }
+   272→      })
+   273→      .catch((err: unknown) => {
+   274→        if (!cancelled) setFixturesError(err instanceof Error ? err.message : "Impossible de charger les jeux de données.");
+   275→      });
+   276→    return () => {
+   277→      cancelled = true;
+   278→    };
+   279→  }, []);
+   280→
+   281→  const currentFixture = useMemo(
+   282→    () => fixtures?.find((f) => f.id === fixture) ?? null,
+   283→    [fixtures, fixture],
+   284→  );
+   285→
+   286→  // ── Exécution des requêtes ──
+   287→  const runSql = useCallback(async () => {
+   288→    if (running || !sql.trim()) return;
+   289→    setRunning(true);
+   290→    setRunError(null);
+   291→    try {
+   292→      const res = await api.post<SqlRunResponse>("/api/sql/run", { sql, fixture });
+   293→      setResult(res);
+   294→      setHistory((h) => [{ id: nextId(), sql, ok: res.ok, at: new Date() }, ...h].slice(0, 15));
+   295→    } catch (err: unknown) {
+   296→      setRunError(err instanceof Error ? err.message : "Une erreur réseau est survenue pendant l'exécution.");
+   297→    } finally {
+   298→      setRunning(false);
+   299→    }
+   300→  }, [running, sql, fixture]);
+   301→
+   302→  // ── Raccourci clavier : Ctrl/Cmd + Entrée ──
+   303→  useEffect(() => {
+   304→    function onKeyDown(e: KeyboardEvent) {
+   305→      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+   306→        e.preventDefault();
+   307→        void runSql();
+   308→      }
+   309→    }
+   310→    window.addEventListener("keydown", onKeyDown);
+   311→    return () => window.removeEventListener("keydown", onKeyDown);
+   312→  }, [runSql]);
+   313→
+   314→  // ── Introspection du schéma (setup du fixture inclus côté serveur) ──
+   315→  const loadSchema = useCallback(async () => {
+   316→    setSchemaLoading(true);
+   317→    setSchemaError(null);
+   318→    try {
+   319→      const res = await api.post<SqlRunResponse>("/api/sql/run", { sql: SCHEMA_QUERY, fixture });
+   320→      const first = res.statements[0];
+   321→      if (res.error) {
+   322→        setSchemaError(res.error);
+   323→        setSchemaRows(null);
+   324→      } else if (first?.error) {
+   325→        setSchemaError(first.error);
+   326→        setSchemaRows(null);
+   327→      } else {
+   328→        setSchemaRows(((first?.rows ?? []) as unknown) as SchemaRow[]);
+   329→      }
+   330→    } catch (err: unknown) {
+   331→      setSchemaError(err instanceof Error ? err.message : "Impossible de récupérer le schéma.");
+   332→      setSchemaRows(null);
+   333→    } finally {
+   334→      setSchemaLoading(false);
+   335→    }
+   336→  }, [fixture]);
+   337→
+   338→  // Changement de fixture : si le schéma est déjà affiché, il est actualisé automatiquement.
+   339→  useEffect(() => {
+   340→    if (schemaRows !== null) void loadSchema();
+   341→  }, [loadSchema]);
+   342→
+   343→  const tables = useMemo(() => {
+   344→    const map = new Map<string, { name: string; cols: { name: string; type: string; pk: boolean }[] }>();
+   345→    for (const r of schemaRows ?? []) {
+   346→      const name = String(r.table_name);
+   347→      if (!map.has(name)) map.set(name, { name, cols: [] });
+   348→      map.get(name)?.cols.push({ name: String(r.column_name), type: String(r.type ?? ""), pk: Number(r.pk) > 0 });
+   349→    }
+   350→    return Array.from(map.values());
+   351→  }, [schemaRows]);
+   352→
+   353→  // ── Actions éditeur ──
+   354→  function insertTableQuery(table: string) {
+   355→    const q = `SELECT * FROM "${table}" LIMIT 20;`;
+   356→    setSql((prev) => (prev.trim() ? `${prev.trimEnd()}\n${q}` : q));
+   357→  }
+   358→
+   359→  return (
+   360→    <section aria-labelledby="sqllab-title" className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+   361→      {/* ── En-tête ── */}
+   362→      <header className="mb-6 flex items-start gap-3">
+   363→        <div className="mt-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground sm:flex">
+   364→          <Database className="h-5 w-5" aria-hidden />
+   365→        </div>
+   366→        <div>
+   367→          <h1 id="sqllab-title" className="typo-h1">
+   368→            Laboratoire SQL
+   369→          </h1>
+   370→          <p className="typo-subtitle mt-1 max-w-2xl">
+   371→            Chaque exécution s&apos;effectue dans une base SQLite en mémoire ISOLÉE — la base applicative n&apos;est jamais
+   372→            touchée.
+   373→          </p>
+   374→        </div>
+   375→      </header>
+   376→
+   377→      {fixturesError && (
+   378→        <Alert variant="destructive" className="mb-4">
+   379→          <XCircle aria-hidden />
+   380→          <AlertTitle>Jeux de données indisponibles</AlertTitle>
+   381→          <AlertDescription>{fixturesError}</AlertDescription>
+   382→        </Alert>
+   383→      )}
+   384→
+   385→      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[330px_minmax(0,1fr)] lg:items-start">
+   386→        {/* ── a) Choix du jeu de données ── */}
+   387→        <Card className="order-1 lg:col-start-1 lg:row-start-1">
+   388→          <CardHeader className="pb-3">
+   389→            <CardTitle className="typo-h3">Jeu de données</CardTitle>
+   390→            <CardDescription>Environnement reinstallé à chaque exécution.</CardDescription>
+   391→          </CardHeader>
+   392→          <CardContent className="space-y-2">
+   393→            <Label htmlFor="sql-fixture" className="sr-only">
+   394→              Jeu de données
+   395→            </Label>
+   396→            <Select value={fixture} onValueChange={setFixture}>
+   397→              <SelectTrigger id="sql-fixture" className="h-11 w-full" aria-label="Choisir le jeu de données">
+   398→                <SelectValue placeholder="Choisir un jeu de données" />
+   399→              </SelectTrigger>
+   400→              <SelectContent>
+   401→                {(fixtures ?? [{ id: DEFAULT_FIXTURE, label: "Bibliothèque", description: "" }]).map((f) => (
+   402→                  <SelectItem key={f.id} value={f.id} className="min-h-11">
+   403→                    {f.label}
+   404→                  </SelectItem>
+   405→                ))}
+   406→              </SelectContent>
+   407→            </Select>
+   408→            {currentFixture?.description && <p className="typo-meta leading-relaxed">{currentFixture.description}</p>}
+   409→          </CardContent>
+   410→        </Card>
+   411→
+   412→        {/* ── Éditeur SQL ── */}
+   413→        <Card className="order-2 lg:col-start-2 lg:row-start-1">
+   414→          <CardHeader className="pb-3">
+   415→            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   416→              <div>
+   417→                <CardTitle className="typo-h3">Éditeur SQL</CardTitle>
+   418→                <CardDescription>Plusieurs instructions séparées par des points-virgules sont acceptées.</CardDescription>
+   419→              </div>
+   420→              <div className="flex items-center gap-2">
+   421→                <AlertDialog>
+   422→                  <AlertDialogTrigger asChild>
+   423→                    <Button variant="outline" className="h-11 gap-2" disabled={running}>
+   424→                      <RotateCcw className="h-4 w-4" aria-hidden />
+   425→                      Réinitialiser
+   426→                    </Button>
+   427→                  </AlertDialogTrigger>
+   428→                  <AlertDialogContent>
+   429→                    <AlertDialogHeader>
+   430→                      <AlertDialogTitle>Vider l&apos;éditeur ?</AlertDialogTitle>
+   431→                      <AlertDialogDescription>
+   432→                        Le contenu actuel de l&apos;éditeur sera effacé. L&apos;historique de la session est conservé.
+   433→                      </AlertDialogDescription>
+   434→                    </AlertDialogHeader>
+   435→                    <AlertDialogFooter>
+   436→                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+   437→                      <AlertDialogAction onClick={() => setSql("")}>Réinitialiser</AlertDialogAction>
+   438→                    </AlertDialogFooter>
+   439→                  </AlertDialogContent>
+   440→                </AlertDialog>
+   441→                <Button onClick={() => void runSql()} disabled={running || !sql.trim()} className="h-11 min-w-[7.5rem] gap-2 font-semibold">
+   442→                  {running ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
+   443→                  {running ? "Exécution…" : "Exécuter"}
+   444→                </Button>
+   445→              </div>
+   446→            </div>
+   447→          </CardHeader>
+   448→          <CardContent className="space-y-2">
+   449→            <div className="overflow-hidden rounded-lg border">
+   450→              <CodeMirror
+   451→                value={sql}
+   452→                onChange={setSql}
+   453→                height="300px"
+   454→                theme={isDark ? oneDark : "light"}
+   455→                extensions={[sqlLanguage()]}
+   456→                aria-label="Éditeur SQL"
+   457→                placeholder={PLACEHOLDER_SQL}
+   458→              />
+   459→            </div>
+   460→            <p className="flex items-center gap-1.5" aria-hidden>
+   461→              <span className="typo-meta">Raccourci :</span>
+   462→              <kbd className="rounded border bg-muted px-1.5 py-0.5 font-code text-[10px]">Ctrl</kbd>
+   463→              <span className="typo-meta">+</span>
+   464→              <kbd className="rounded border bg-muted px-1.5 py-0.5 font-code text-[10px]">Entrée</kbd>
+   465→            </p>
+   466→          </CardContent>
+   467→        </Card>
+   468→
+   469→        {/* ── Résultats ── */}
+   470→        <Card className="order-3 lg:col-start-2 lg:row-start-2">
+   471→          <CardHeader className="pb-3">
+   472→            <div className="flex flex-wrap items-center justify-between gap-2">
+   473→              <CardTitle className="typo-h3">Résultats</CardTitle>
+   474→              {result && (
+   475→                <span className="flex items-center gap-2">
+   476→                  <Badge variant={result.ok ? "outline" : "destructive"} className="text-[10px]">
+   477→                    {result.ok ? "Succès" : "Échec"}
+   478→                  </Badge>
+   479→                  <span className="typo-meta tnum">{result.durationMs} ms</span>
+   480→                </span>
+   481→              )}
+   482→            </div>
+   483→            <CardDescription>Un bloc par instruction exécutée, dans l&apos;ordre du script.</CardDescription>
+   484→          </CardHeader>
+   485→          <CardContent className="space-y-3">
+   486→            {runError && (
+   487→              <Alert variant="destructive">
+   488→                <XCircle aria-hidden />
+   489→                <AlertTitle>Erreur réseau</AlertTitle>
+   490→                <AlertDescription>{runError}</AlertDescription>
+   491→              </Alert>
+   492→            )}
+   493→
+   494→            {!result && !runError && <p className="typo-meta">Les résultats de vos requêtes apparaîtront ici.</p>}
+   495→
+   496→            {result && (
+   497→              <>
+   498→                {result.error && (
+   499→                  <Alert variant="destructive">
+   500→                    <XCircle aria-hidden />
+   501→                    <AlertTitle>Erreur du script</AlertTitle>
+   502→                    <AlertDescription>{result.error}</AlertDescription>
+   503→                  </Alert>
+   504→                )}
+   505→                {result.statements.length === 0 && !result.error && (
+   506→                  <p className="typo-meta">Aucune instruction détectée dans le script.</p>
+   507→                )}
+   508→                {result.statements.map((st, i) => (
+   509→                  <StatementBlock key={`${i}-${st.sql.slice(0, 24)}`} st={st} />
+   510→                ))}
+   511→              </>
+   512→            )}
+   513→          </CardContent>
+   514→        </Card>
+   515→
+   516→        {/* ── b) Schéma ── */}
+   517→        <Card className="order-4 lg:col-start-1 lg:row-start-2">
+   518→          <CardHeader className="pb-3">
+   519→            <div className="flex items-center justify-between gap-2">
+   520→              <CardTitle className="typo-h3">Schéma</CardTitle>
+   521→              <Button
+   522→                variant="outline"
+   523→                size="sm"
+   524→                className="h-9 gap-2"
+   525→                onClick={() => {
+   526→                  void loadSchema();
+   527→                }}
+   528→                disabled={schemaLoading}
+   529→              >
+   530→                {schemaLoading ? (
+   531→                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+   532→                ) : (
+   533→                  <Table2 className="h-3.5 w-3.5" aria-hidden />
+   534→                )}
+   535→                {schemaRows === null ? "Afficher le schéma" : "Actualiser"}
+   536→              </Button>
+   537→            </div>
+   538→            <CardDescription>Tables et colonnes du jeu de données choisi. Cliquez sur une table pour insérer une requête.</CardDescription>
+   539→          </CardHeader>
+   540→          <CardContent>
+   541→            {schemaError && (
+   542→              <Alert variant="destructive" className="mb-3">
+   543→                <XCircle aria-hidden />
+   544→                <AlertTitle>Erreur</AlertTitle>
+   545→                <AlertDescription>{schemaError}</AlertDescription>
+   546→              </Alert>
+   547→            )}
+   548→            {schemaRows === null && !schemaError && (
+   549→              <p className="typo-meta">Lancez l&apos;introspection pour découvrir les tables disponibles.</p>
+   550→            )}
+   551→            {schemaRows !== null && tables.length === 0 && !schemaError && (
+   552→              <p className="typo-meta">Aucune table dans cette base (jeu de données vide).</p>
+   553→            )}
+   554→            {tables.length > 0 && (
+   555→              <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
+   556→                {tables.map((t) => (
+   557→                  <li key={t.name} className="rounded-lg border">
+   558→                    <button
+   559→                      type="button"
+   560→                      onClick={() => insertTableQuery(t.name)}
+   561→                      className="flex w-full items-center gap-2 rounded-t-lg px-3 py-2 text-left transition-colors hover:bg-muted/70"
+   562→                      title={`Insérer SELECT * FROM ${t.name} LIMIT 20;`}
+   563→                    >
+   564→                      <Table2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+   565→                      <span className="font-code truncate text-[13px] font-semibold">{t.name}</span>
+   566→                      <span className="typo-meta tnum ml-auto shrink-0">
+   567→                        {t.cols.length} col.
+   568→                      </span>
+   569→                    </button>
+   570→                    <ul className="border-t px-3 py-2">
+   571→                      {t.cols.map((c) => (
+   572→                        <li key={c.name} className="flex items-center gap-1.5 py-0.5">
+   573→                          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+   574→                          <span className="font-code truncate text-[12px]">{c.name}</span>
+   575→                          <span className="typo-meta shrink-0">{c.type}</span>
+   576→                          {c.pk && (
+   577→                            <Badge variant="outline" className="ml-auto shrink-0 px-1 py-0 text-[9px]">
+   578→                              PK
+   579→                            </Badge>
+   580→                          )}
+   581→                        </li>
+   582→                      ))}
+   583→                    </ul>
+   584→                  </li>
+   585→                ))}
+   586→              </ul>
+   587→            )}
+   588→          </CardContent>
+   589→        </Card>
+   590→
+   591→        {/* ── Historique ── */}
+   592→        <Card className="order-5 lg:col-start-1 lg:row-start-3">
+   593→          <CardHeader className="pb-3">
+   594→            <CardTitle className="typo-h3">Historique de la session</CardTitle>
+   595→            <CardDescription>Les 15 dernières requêtes, la plus récente en premier. Cliquez pour restaurer.</CardDescription>
+   596→          </CardHeader>
+   597→          <CardContent>
+   598→            {history.length === 0 ? (
+   599→              <p className="typo-meta">Aucune requête exécutée pour le moment.</p>
+   600→            ) : (
+   601→              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+   602→                {history.map((h) => (
+   603→                  <li key={h.id}>
+   604→                    <button
+   605→                      type="button"
+   606→                      onClick={() => setSql(h.sql)}
+   607→                      className="w-full rounded-lg border px-3 py-2 text-left transition-colors hover:bg-muted/70"
+   608→                      title="Restaurer cette requête dans l'éditeur"
+   609→                    >
+   610→                      <span className="flex items-center justify-between gap-2">
+   611→                        <span className="font-code truncate text-[12px]">{truncate(h.sql.replace(/\s+/g, " "), 64)}</span>
+   612→                        {h.ok ? (
+   613→                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-500" aria-hidden />
+   614→                        ) : (
+   615→                          <XCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden />
+   616→                        )}
+   617→                      </span>
+   618→                      <span className="typo-meta tnum mt-0.5 block">{h.at.toLocaleTimeString("fr-FR")}</span>
+   619→                    </button>
+   620→                  </li>
+   621→                ))}
+   622→              </ul>
+   623→            )}
+   624→          </CardContent>
+   625→        </Card>
+   626→
+   627→        {/* ── Bloc d'aide ── */}
+   628→        <Card className="order-6 lg:col-start-2 lg:row-start-3">
+   629→          <Collapsible open={helpOpen} onOpenChange={setHelpOpen}>
+   630→            <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 rounded-t-xl px-6 py-4 text-left">
+   631→              <span className="flex items-center gap-2">
+   632→                <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden />
+   633→                <span className="typo-h3">Notions SQL prises en charge</span>
+   634→              </span>
+   635→              <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", helpOpen && "rotate-180")} aria-hidden />
+   636→            </CollapsibleTrigger>
+   637→            <CollapsibleContent>
+   638→              <CardContent className="space-y-3 pt-0">
+   639→                <ul className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+   640→                  {SQL_NOTIONS.map((n) => (
+   641→                    <li key={n} className="flex items-center gap-1.5">
+   642→                      <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+   643→                      <span className="typo-meta text-foreground/90">{n}</span>
+   644→                    </li>
+   645→                  ))}
+   646→                </ul>
+   647→                <Alert className="border-amber-600/40 text-amber-700 dark:text-amber-400">
+   648→                  <ShieldAlert aria-hidden />
+   649→                  <AlertTitle>Instructions bloquées</AlertTitle>
+   650→                  <AlertDescription className="text-amber-700/90 dark:text-amber-400/90">
+   651→                    ATTACH, LOAD EXTENSION et VACUUM INTO sont bloqués.
+   652→                  </AlertDescription>
+   653→                </Alert>
+   654→              </CardContent>
+   655→            </CollapsibleContent>
+   656→          </Collapsible>
+   657→        </Card>
+   658→      </div>
+   659→    </section>
+   660→  );
+   661→}
+   662→

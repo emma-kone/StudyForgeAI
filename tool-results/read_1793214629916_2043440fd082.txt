@@ -1,0 +1,816 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useMemo, useState } from "react";
+     4→import { api } from "@/lib/client-api";
+     5→import { useToast } from "@/hooks/use-toast";
+     6→import { useAppStore } from "@/store/app-store";
+     7→import { QUESTION_TYPES, QUESTION_TYPE_LABELS, MODE_LABELS } from "@/lib/types";
+     8→import type { Difficulty, QuestionType, SessionMode } from "@/lib/types";
+     9→import { Button } from "@/components/ui/button";
+    10→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Input } from "@/components/ui/input";
+    13→import { Label } from "@/components/ui/label";
+    14→import { Checkbox } from "@/components/ui/checkbox";
+    15→import { Slider } from "@/components/ui/slider";
+    16→import { Skeleton } from "@/components/ui/skeleton";
+    17→import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+    18→import { Separator } from "@/components/ui/separator";
+    19→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    20→import { Switch } from "@/components/ui/switch";
+    21→import { BookOpen, FileX, History, Loader2, Play, Sparkles, TriangleAlert, X } from "lucide-react";
+    22→
+    23→// ─────────────────────────────────────────────────────────────────────────────
+    24→// Types locaux
+    25→// ─────────────────────────────────────────────────────────────────────────────
+    26→
+    27→interface SubjectDto {
+    28→  id: string;
+    29→  name: string;
+    30→  color: string;
+    31→  chapters: { id: string; name: string }[];
+    32→  _count: { documents: number };
+    33→}
+    34→
+    35→interface DocumentDto {
+    36→  id: string;
+    37→  name: string;
+    38→  type: string;
+    39→  status: string;
+    40→  subject: { name: string; color: string } | null;
+    41→}
+    42→
+    43→interface HistoryExerciseDto {
+    44→  id: string;
+    45→  title: string;
+    46→  subject: { name: string; color: string } | null;
+    47→  config: { difficulty?: Difficulty; mode?: SessionMode; themes?: string[] };
+    48→  questionCount: number;
+    49→  status: string;
+    50→  createdAt: string;
+    51→}
+    52→
+    53→interface GenerateViewProps {
+    54→  onSessionCreated: (sessionId: string) => void;
+    55→}
+    56→
+    57→interface ConfigState {
+    58→  subjectId: string; // "all" = toutes les matières
+    59→  difficulty: Difficulty;
+    60→  questionCount: number;
+    61→  mode: SessionMode;
+    62→  durationMin?: number;
+    63→  pointsPerQuestion: number;
+    64→  theoryPracticeMix: number; // 0..100 % théorie
+    65→  hintsEnabled: boolean;
+    66→  correctionTiming: "immediate" | "end";
+    67→}
+    68→
+    69→// ─────────────────────────────────────────────────────────────────────────────
+    70→// Constantes
+    71→// ─────────────────────────────────────────────────────────────────────────────
+    72→
+    73→const ALL_SUBJECT = "all";
+    74→const MAX_THEMES = 10;
+    75→const MAX_QUESTIONS = 20;
+    76→
+    77→const DIFFICULTY_OPTIONS: { value: Difficulty; label: string }[] = [
+    78→  { value: "decouverte", label: "Découverte" },
+    79→  { value: "facile", label: "Facile" },
+    80→  { value: "moyen", label: "Moyen (défaut)" },
+    81→  { value: "difficile", label: "Difficile" },
+    82→  { value: "expert", label: "Expert" },
+    83→];
+    84→
+    85→const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+    86→  decouverte: "Découverte",
+    87→  facile: "Facile",
+    88→  moyen: "Moyen",
+    89→  difficile: "Difficile",
+    90→  expert: "Expert",
+    91→};
+    92→
+    93→const TYPE_PRESETS: { label: string; types: QuestionType[] }[] = [
+    94→  { label: "QCM & Vrai/Faux", types: ["qcm_single", "qcm_multiple", "true_false"] },
+    95→  { label: "Code", types: ["error_identification", "code_output", "code_write", "code_fix", "debug"] },
+    96→  { label: "SQL", types: ["sql_query", "sql_create_table", "sql_database"] },
+    97→  {
+    98→    label: "Réflexion",
+    99→    types: [
+   100→      "matching",
+   101→      "ordering",
+   102→      "fill_blank",
+   103→      "short_answer",
+   104→      "open_question",
+   105→      "data_modeling",
+   106→      "case_study",
+   107→      "combined",
+   108→      "exam_composite",
+   109→    ],
+   110→  },
+   111→  { label: "Tout", types: [...QUESTION_TYPES] },
+   112→];
+   113→
+   114→const dateFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" });
+   115→
+   116→function clampInt(raw: string, min: number, max: number, fallback: number): number {
+   117→  const parsed = Number.parseInt(raw, 10);
+   118→  if (Number.isNaN(parsed)) return fallback;
+   119→  return Math.min(max, Math.max(min, parsed));
+   120→}
+   121→
+   122→function formatDate(iso: string): string {
+   123→  const date = new Date(iso);
+   124→  return Number.isNaN(date.getTime()) ? "Date inconnue" : dateFormat.format(date);
+   125→}
+   126→
+   127→// ─────────────────────────────────────────────────────────────────────────────
+   128→// Vue « Générer des exercices »
+   129→// ─────────────────────────────────────────────────────────────────────────────
+   130→
+   131→export default function GenerateView({ onSessionCreated }: GenerateViewProps) {
+   132→  const { toast } = useToast();
+   133→  const setView = useAppStore((s) => s.setView);
+   134→
+   135→  // Données distantes
+   136→  const [refresh, setRefresh] = useState(0);
+   137→  const [loading, setLoading] = useState(true);
+   138→  const [loadError, setLoadError] = useState<string | null>(null);
+   139→  const [subjects, setSubjects] = useState<SubjectDto[]>([]);
+   140→  const [allDocuments, setAllDocuments] = useState<DocumentDto[]>([]);
+   141→  const [history, setHistory] = useState<HistoryExerciseDto[]>([]);
+   142→
+   143→  // Configuration de génération
+   144→  const [config, setConfig] = useState<ConfigState>({
+   145→    subjectId: ALL_SUBJECT,
+   146→    difficulty: "moyen",
+   147→    questionCount: 5,
+   148→    mode: "apprentissage",
+   149→    pointsPerQuestion: 1,
+   150→    theoryPracticeMix: 50,
+   151→    hintsEnabled: true,
+   152→    correctionTiming: "immediate",
+   153→  });
+   154→  const [documentIds, setDocumentIds] = useState<string[]>([]);
+   155→  const [types, setTypes] = useState<QuestionType[]>([]);
+   156→  const [themes, setThemes] = useState<string[]>([]);
+   157→  const [themeInput, setThemeInput] = useState("");
+   158→  const [generating, setGenerating] = useState(false);
+   159→  const [startingId, setStartingId] = useState<string | null>(null);
+   160→
+   161→  // Chargement initial (matières + documents + historique)
+   162→  useEffect(() => {
+   163→    let cancelled = false;
+   164→    setLoading(true);
+   165→    setLoadError(null);
+   166→    Promise.all([
+   167→      api.get<{ subjects: SubjectDto[] }>("/api/subjects"),
+   168→      api.get<{ documents: DocumentDto[] }>("/api/documents"),
+   169→      api.get<{ exercises: HistoryExerciseDto[] }>("/api/exercises/list"),
+   170→    ])
+   171→      .then(([subjectsRes, documentsRes, historyRes]) => {
+   172→        if (cancelled) return;
+   173→        setSubjects(subjectsRes.subjects);
+   174→        setAllDocuments(documentsRes.documents);
+   175→        setHistory(historyRes.exercises);
+   176→      })
+   177→      .catch((err: unknown) => {
+   178→        if (cancelled) return;
+   179→        setLoadError(
+   180→          err instanceof Error ? err.message : "Impossible de charger les matières, documents et exercices."
+   181→        );
+   182→      })
+   183→      .finally(() => {
+   184→        if (!cancelled) setLoading(false);
+   185→      });
+   186→    return () => {
+   187→      cancelled = true;
+   188→    };
+   189→  }, [refresh]);
+   190→
+   191→  // Données dérivées
+   192→  const readyDocuments = useMemo(() => allDocuments.filter((d) => d.status === "READY"), [allDocuments]);
+   193→  const selectedSubject =
+   194→    config.subjectId === ALL_SUBJECT ? null : (subjects.find((s) => s.id === config.subjectId) ?? null);
+   195→  const visibleDocuments = useMemo(
+   196→    () => (selectedSubject ? readyDocuments.filter((d) => d.subject?.name === selectedSubject.name) : readyDocuments),
+   197→    [readyDocuments, selectedSubject]
+   198→  );
+   199→
+   200→  const missingHint =
+   201→    documentIds.length === 0
+   202→      ? "Sélectionnez au moins un document"
+   203→      : types.length === 0
+   204→        ? "Choisissez au moins un type d’exercice"
+   205→        : null;
+   206→  const canSubmit = missingHint === null && !generating;
+   207→
+   208→  // ── Handlers ──
+   209→
+   210→  function updateConfig(patch: Partial<ConfigState>) {
+   211→    setConfig((prev) => ({ ...prev, ...patch }));
+   212→  }
+   213→
+   214→  function toggleDocument(id: string, checked: boolean) {
+   215→    setDocumentIds((prev) =>
+   216→      checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((docId) => docId !== id)
+   217→    );
+   218→  }
+   219→
+   220→  function toggleType(type: QuestionType, checked: boolean) {
+   221→    setTypes((prev) => (checked ? (prev.includes(type) ? prev : [...prev, type]) : prev.filter((t) => t !== type)));
+   222→  }
+   223→
+   224→  function selectAllVisible() {
+   225→    setDocumentIds((prev) => Array.from(new Set([...prev, ...visibleDocuments.map((d) => d.id)])));
+   226→  }
+   227→
+   228→  function addTheme() {
+   229→    const trimmed = themeInput.trim();
+   230→    if (!trimmed) return;
+   231→    if (themes.length >= MAX_THEMES) {
+   232→      toast({ title: "Limite atteinte", description: `Maximum ${MAX_THEMES} notions ciblées.` });
+   233→      return;
+   234→    }
+   235→    setThemes((prev) =>
+   236→      prev.some((t) => t.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
+   237→    );
+   238→    setThemeInput("");
+   239→  }
+   240→
+   241→  function removeTheme(theme: string) {
+   242→    setThemes((prev) => prev.filter((t) => t !== theme));
+   243→  }
+   244→
+   245→  async function submit(event: React.FormEvent<HTMLFormElement>) {
+   246→    event.preventDefault();
+   247→    if (documentIds.length === 0 || types.length === 0 || generating) return;
+   248→    setGenerating(true);
+   249→    try {
+   250→      const exercise = await api.post<{ ok: boolean; exerciseId: string; questionCount: number }>("/api/exercises", {
+   251→        subjectId: config.subjectId === ALL_SUBJECT ? undefined : config.subjectId,
+   252→        documentIds,
+   253→        themes,
+   254→        difficulty: config.difficulty,
+   255→        questionCount: config.questionCount,
+   256→        types,
+   257→        mode: config.mode,
+   258→        durationMin: config.mode === "examen" ? config.durationMin : undefined,
+   259→        pointsPerQuestion: config.pointsPerQuestion,
+   260→        theoryPracticeMix: config.theoryPracticeMix,
+   261→        hintsEnabled: config.hintsEnabled,
+   262→        correctionTiming: config.correctionTiming,
+   263→      });
+   264→      const session = await api.post<{ ok: boolean; sessionId: string }>("/api/sessions", {
+   265→        exerciseId: exercise.exerciseId,
+   266→        mode: config.mode,
+   267→      });
+   268→      toast({
+   269→        title: "Exercices générés",
+   270→        description: `${exercise.questionCount} question(s) prête(s).`,
+   271→      });
+   272→      onSessionCreated(session.sessionId);
+   273→    } catch (err) {
+   274→      toast({
+   275→        title: "Échec de la génération",
+   276→        description: err instanceof Error ? err.message : "Une erreur inattendue est survenue.",
+   277→        variant: "destructive",
+   278→      });
+   279→    } finally {
+   280→      setGenerating(false);
+   281→    }
+   282→  }
+   283→
+   284→  async function startExercise(exerciseId: string, mode: SessionMode) {
+   285→    setStartingId(exerciseId);
+   286→    try {
+   287→      const session = await api.post<{ ok: boolean; sessionId: string }>("/api/sessions", { exerciseId, mode });
+   288→      onSessionCreated(session.sessionId);
+   289→    } catch (err) {
+   290→      toast({
+   291→        title: "Impossible de démarrer la session",
+   292→        description: err instanceof Error ? err.message : "Une erreur inattendue est survenue.",
+   293→        variant: "destructive",
+   294→      });
+   295→    } finally {
+   296→      setStartingId(null);
+   297→    }
+   298→  }
+   299→
+   300→  // ── Rendu ──
+   301→
+   302→  return (
+   303→    <section className="space-y-6" aria-labelledby="generate-title">
+   304→      {/* 1. En-tête */}
+   305→      <header className="space-y-1">
+   306→        <h1 id="generate-title" className="typo-h1">
+   307→          Générer des exercices
+   308→        </h1>
+   309→        <p className="typo-subtitle max-w-2xl">
+   310→          Configurez votre session : l’IA s’appuie sur vos documents importés pour créer des exercices corrigés
+   311→          automatiquement.
+   312→        </p>
+   313→      </header>
+   314→
+   315→      {loadError ? (
+   316→        <Alert variant="destructive">
+   317→          <TriangleAlert className="h-4 w-4" aria-hidden />
+   318→          <AlertTitle>Erreur de chargement</AlertTitle>
+   319→          <AlertDescription className="flex flex-col items-start gap-3">
+   320→            <p>{loadError}</p>
+   321→            <Button type="button" size="sm" variant="outline" onClick={() => setRefresh((r) => r + 1)}>
+   322→              Réessayer
+   323→            </Button>
+   324→          </AlertDescription>
+   325→        </Alert>
+   326→      ) : loading ? (
+   327→        <p className="sr-only" role="status">
+   328→          Chargement des matières, documents et exercices…
+   329→        </p>
+   330→      ) : null}
+   331→
+   332→      {loading && !loadError ? (
+   333→        /* Squelettes de chargement */
+   334→        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3" aria-hidden>
+   335→          <Card className="rounded-xl border bg-card lg:col-span-2">
+   336→            <CardContent className="space-y-6">
+   337→              <div className="space-y-3">
+   338→                <Skeleton className="h-4 w-44" />
+   339→                <Skeleton className="h-9 w-full" />
+   340→                <Skeleton className="h-40 w-full" />
+   341→              </div>
+   342→              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   343→                <Skeleton className="h-9 w-full" />
+   344→                <Skeleton className="h-9 w-full" />
+   345→              </div>
+   346→              <div className="space-y-3">
+   347→                <Skeleton className="h-4 w-40" />
+   348→                <Skeleton className="h-44 w-full" />
+   349→              </div>
+   350→              <Skeleton className="h-10 w-full" />
+   351→            </CardContent>
+   352→          </Card>
+   353→          <Card className="rounded-xl border bg-card">
+   354→            <CardContent className="space-y-3">
+   355→              <Skeleton className="h-4 w-40" />
+   356→              <Skeleton className="h-24 w-full" />
+   357→              <Skeleton className="h-24 w-full" />
+   358→              <Skeleton className="h-24 w-full" />
+   359→            </CardContent>
+   360→          </Card>
+   361→        </div>
+   362→      ) : !loadError ? (
+   363→        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+   364→          {/* 2. Formulaire de génération */}
+   365→          <Card className="rounded-xl border bg-card lg:col-span-2">
+   366→            <CardContent>
+   367→              <form
+   368→                className="space-y-6"
+   369→                onSubmit={submit}
+   370→                aria-label="Configuration de génération d’exercices"
+   371→              >
+   372→                {/* Documents sources (requis) */}
+   373→                <div className="space-y-3">
+   374→                  <div className="flex flex-wrap items-center gap-2">
+   375→                    <h3 className="typo-h3">Documents sources</h3>
+   376→                    <Badge variant="outline">Requis</Badge>
+   377→                  </div>
+   378→
+   379→                  {readyDocuments.length === 0 ? (
+   380→                    <Alert>
+   381→                      <TriangleAlert className="h-4 w-4" aria-hidden />
+   382→                      <AlertTitle>Aucun document prêt</AlertTitle>
+   383→                      <AlertDescription className="flex flex-col items-start gap-3">
+   384→                        <p>Importez d’abord un cours dans la Bibliothèque.</p>
+   385→                        <Button
+   386→                          type="button"
+   387→                          size="sm"
+   388→                          variant="outline"
+   389→                          className="gap-1.5"
+   390→                          onClick={() => setView("library")}
+   391→                        >
+   392→                          <BookOpen className="h-3.5 w-3.5" aria-hidden />
+   393→                          Aller à la Bibliothèque
+   394→                        </Button>
+   395→                      </AlertDescription>
+   396→                    </Alert>
+   397→                  ) : (
+   398→                    <div className="space-y-2">
+   399→                      <div className="flex flex-wrap items-center justify-between gap-2">
+   400→                        <Select value={config.subjectId} onValueChange={(v) => updateConfig({ subjectId: v })}>
+   401→                          <SelectTrigger className="w-full sm:w-64" aria-label="Filtrer les documents par matière">
+   402→                            <SelectValue />
+   403→                          </SelectTrigger>
+   404→                          <SelectContent>
+   405→                            <SelectItem value={ALL_SUBJECT}>Toutes les matières</SelectItem>
+   406→                            {subjects.map((subject) => (
+   407→                              <SelectItem key={subject.id} value={subject.id}>
+   408→                                {subject.name}
+   409→                              </SelectItem>
+   410→                            ))}
+   411→                          </SelectContent>
+   412→                        </Select>
+   413→                        <div className="flex flex-wrap items-center gap-1.5">
+   414→                          <Badge variant="secondary">
+   415→                            <span className="tnum">{documentIds.length}</span> sélectionné(s)
+   416→                          </Badge>
+   417→                          <Button
+   418→                            type="button"
+   419→                            size="sm"
+   420→                            variant="ghost"
+   421→                            disabled={visibleDocuments.length === 0}
+   422→                            onClick={selectAllVisible}
+   423→                          >
+   424→                            Tout sélectionner
+   425→                          </Button>
+   426→                          <Button
+   427→                            type="button"
+   428→                            size="sm"
+   429→                            variant="ghost"
+   430→                            disabled={documentIds.length === 0}
+   431→                            onClick={() => setDocumentIds([])}
+   432→                          >
+   433→                            Effacer
+   434→                          </Button>
+   435→                        </div>
+   436→                      </div>
+   437→
+   438→                      {visibleDocuments.length === 0 ? (
+   439→                        <div className="flex flex-col items-center gap-1.5 rounded-md border border-dashed py-6 text-center">
+   440→                          <FileX className="h-5 w-5 text-muted-foreground" aria-hidden />
+   441→                          <p className="typo-h3">Aucun document</p>
+   442→                          <p className="typo-subtitle">Aucun document prêt pour cette matière.</p>
+   443→                        </div>
+   444→                      ) : (
+   445→                        <div
+   446→                          className="max-h-56 space-y-2 overflow-y-auto rounded-md border p-3"
+   447→                          role="group"
+   448→                          aria-label="Documents prêts pour la génération"
+   449→                        >
+   450→                          {visibleDocuments.map((doc) => {
+   451→                            const checked = documentIds.includes(doc.id);
+   452→                            return (
+   453→                              <label
+   454→                                key={doc.id}
+   455→                                htmlFor={`doc-${doc.id}`}
+   456→                                className="flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1 transition-colors hover:bg-accent/60"
+   457→                              >
+   458→                                <Checkbox
+   459→                                  id={`doc-${doc.id}`}
+   460→                                  checked={checked}
+   461→                                  onCheckedChange={(c) => toggleDocument(doc.id, c === true)}
+   462→                                />
+   463→                                <span className="min-w-0 flex-1 truncate text-sm font-medium" title={doc.name}>
+   464→                                  {doc.name}
+   465→                                </span>
+   466→                                {doc.subject && (
+   467→                                  <Badge variant="outline" className="shrink-0 gap-1.5">
+   468→                                    <span
+   469→                                      className="h-2 w-2 rounded-full"
+   470→                                      style={{ backgroundColor: doc.subject.color }}
+   471→                                      aria-hidden
+   472→                                    />
+   473→                                    {doc.subject.name}
+   474→                                  </Badge>
+   475→                                )}
+   476→                              </label>
+   477→                            );
+   478→                          })}
+   479→                        </div>
+   480→                      )}
+   481→                    </div>
+   482→                  )}
+   483→                </div>
+   484→
+   485→                {/* Notions à cibler */}
+   486→                <div className="space-y-2">
+   487→                  <Label htmlFor="theme-input">Notions à cibler (optionnel)</Label>
+   488→                  <Input
+   489→                    id="theme-input"
+   490→                    type="text"
+   491→                    value={themeInput}
+   492→                    placeholder="Ex. : récursivité, complexité, jointures…"
+   493→                    onChange={(e) => setThemeInput(e.target.value)}
+   494→                    onKeyDown={(e) => {
+   495→                      if (e.key === "Enter") {
+   496→                        e.preventDefault();
+   497→                        addTheme();
+   498→                      }
+   499→                    }}
+   500→                  />
+   501→                  <p className="typo-meta">
+   502→                    Appuyez sur Entrée pour ajouter. Laissez vide pour couvrir tout le document.
+   503→                  </p>
+   504→                  {themes.length > 0 && (
+   505→                    <ul className="flex flex-wrap gap-1.5" aria-label="Notions ciblées">
+   506→                      {themes.map((theme) => (
+   507→                        <li key={theme}>
+   508→                          <Badge variant="secondary" className="gap-1 pr-1">
+   509→                            {theme}
+   510→                            <button
+   511→                              type="button"
+   512→                              aria-label={`Retirer la notion ${theme}`}
+   513→                              className="rounded-full p-0.5 transition-colors hover:bg-foreground/15"
+   514→                              onClick={() => removeTheme(theme)}
+   515→                            >
+   516→                              <X className="h-3 w-3" aria-hidden />
+   517→                            </button>
+   518→                          </Badge>
+   519→                        </li>
+   520→                      ))}
+   521→                    </ul>
+   522→                  )}
+   523→                </div>
+   524→
+   525→                {/* Difficulté + nombre de questions */}
+   526→                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   527→                  <div className="space-y-2">
+   528→                    <Label htmlFor="difficulty">Difficulté</Label>
+   529→                    <Select
+   530→                      value={config.difficulty}
+   531→                      onValueChange={(v) => updateConfig({ difficulty: v as Difficulty })}
+   532→                    >
+   533→                      <SelectTrigger id="difficulty" className="w-full">
+   534→                        <SelectValue />
+   535→                      </SelectTrigger>
+   536→                      <SelectContent>
+   537→                        {DIFFICULTY_OPTIONS.map((option) => (
+   538→                          <SelectItem key={option.value} value={option.value}>
+   539→                            {option.label}
+   540→                          </SelectItem>
+   541→                        ))}
+   542→                      </SelectContent>
+   543→                    </Select>
+   544→                  </div>
+   545→                  <div className="space-y-2">
+   546→                    <Label htmlFor="question-count">Nombre de questions</Label>
+   547→                    <Input
+   548→                      id="question-count"
+   549→                      type="number"
+   550→                      min={1}
+   551→                      max={MAX_QUESTIONS}
+   552→                      value={config.questionCount}
+   553→                      onChange={(e) =>
+   554→                        updateConfig({ questionCount: clampInt(e.target.value, 1, MAX_QUESTIONS, 5) })
+   555→                      }
+   556→                    />
+   557→                  </div>
+   558→                </div>
+   559→
+   560→                {/* Types d’exercices (requis) */}
+   561→                <div className="space-y-3">
+   562→                  <div className="flex flex-wrap items-center gap-2">
+   563→                    <h3 className="typo-h3">Types d’exercices</h3>
+   564→                    <Badge variant="outline">Requis</Badge>
+   565→                    <Badge variant="secondary" className="ml-auto">
+   566→                      <span className="tnum">{types.length}</span> type(s)
+   567→                    </Badge>
+   568→                  </div>
+   569→                  <div className="flex flex-wrap gap-2" role="group" aria-label="Ensembles prédéfinis de types">
+   570→                    {TYPE_PRESETS.map((preset) => (
+   571→                      <Button
+   572→                        key={preset.label}
+   573→                        type="button"
+   574→                        size="sm"
+   575→                        variant="outline"
+   576→                        onClick={() => setTypes(preset.types)}
+   577→                      >
+   578→                        {preset.label}
+   579→                      </Button>
+   580→                    ))}
+   581→                  </div>
+   582→                  <div
+   583→                    className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto rounded-md border p-3 sm:grid-cols-2"
+   584→                    role="group"
+   585→                    aria-label="Types d’exercices disponibles"
+   586→                  >
+   587→                    {QUESTION_TYPES.map((type) => {
+   588→                      const checked = types.includes(type);
+   589→                      return (
+   590→                        <label
+   591→                          key={type}
+   592→                          htmlFor={`type-${type}`}
+   593→                          className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-accent/60"
+   594→                        >
+   595→                          <Checkbox
+   596→                            id={`type-${type}`}
+   597→                            checked={checked}
+   598→                            onCheckedChange={(c) => toggleType(type, c === true)}
+   599→                          />
+   600→                          <span className="min-w-0 truncate text-sm" title={QUESTION_TYPE_LABELS[type]}>
+   601→                            {QUESTION_TYPE_LABELS[type]}
+   602→                          </span>
+   603→                        </label>
+   604→                      );
+   605→                    })}
+   606→                  </div>
+   607→                </div>
+   608→
+   609→                {/* Mode de session + durée */}
+   610→                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   611→                  <div className="space-y-2">
+   612→                    <Label htmlFor="mode">Mode de session</Label>
+   613→                    <Select value={config.mode} onValueChange={(v) => updateConfig({ mode: v as SessionMode })}>
+   614→                      <SelectTrigger id="mode" className="w-full">
+   615→                        <SelectValue />
+   616→                      </SelectTrigger>
+   617→                      <SelectContent>
+   618→                        {(Object.keys(MODE_LABELS) as SessionMode[]).map((mode) => (
+   619→                          <SelectItem key={mode} value={mode}>
+   620→                            {MODE_LABELS[mode]}
+   621→                          </SelectItem>
+   622→                        ))}
+   623→                      </SelectContent>
+   624→                    </Select>
+   625→                  </div>
+   626→                  {config.mode === "examen" && (
+   627→                    <div className="space-y-2">
+   628→                      <Label htmlFor="duration-min">Durée (minutes)</Label>
+   629→                      <Input
+   630→                        id="duration-min"
+   631→                        type="number"
+   632→                        min={1}
+   633→                        max={240}
+   634→                        placeholder="Optionnel"
+   635→                        value={config.durationMin ?? ""}
+   636→                        onChange={(e) => {
+   637→                          const raw = e.target.value;
+   638→                          updateConfig({ durationMin: raw === "" ? undefined : clampInt(raw, 1, 240, 60) });
+   639→                        }}
+   640→                      />
+   641→                    </div>
+   642→                  )}
+   643→                </div>
+   644→
+   645→                {/* Points + correction */}
+   646→                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   647→                  <div className="space-y-2">
+   648→                    <Label htmlFor="points-per-question">Points par question</Label>
+   649→                    <Input
+   650→                      id="points-per-question"
+   651→                      type="number"
+   652→                      min={1}
+   653→                      max={MAX_QUESTIONS}
+   654→                      value={config.pointsPerQuestion}
+   655→                      onChange={(e) =>
+   656→                        updateConfig({ pointsPerQuestion: clampInt(e.target.value, 1, MAX_QUESTIONS, 1) })
+   657→                      }
+   658→                    />
+   659→                  </div>
+   660→                  <div className="space-y-2">
+   661→                    <Label htmlFor="correction-timing">Correction</Label>
+   662→                    <Select
+   663→                      value={config.correctionTiming}
+   664→                      onValueChange={(v) => updateConfig({ correctionTiming: v === "end" ? "end" : "immediate" })}
+   665→                    >
+   666→                      <SelectTrigger id="correction-timing" className="w-full">
+   667→                        <SelectValue />
+   668→                      </SelectTrigger>
+   669→                      <SelectContent>
+   670→                        <SelectItem value="immediate">Immédiate</SelectItem>
+   671→                        <SelectItem value="end">À la fin de la session</SelectItem>
+   672→                      </SelectContent>
+   673→                    </Select>
+   674→                  </div>
+   675→                </div>
+   676→
+   677→                {/* Équilibre théorie / pratique */}
+   678→                <div className="space-y-2">
+   679→                  <div className="flex flex-wrap items-center justify-between gap-2">
+   680→                    <Label htmlFor="theory-mix">Équilibre théorie / pratique</Label>
+   681→                    <span className="typo-meta tnum">
+   682→                      Théorie {config.theoryPracticeMix} % · Pratique {100 - config.theoryPracticeMix} %
+   683→                    </span>
+   684→                  </div>
+   685→                  <Slider
+   686→                    id="theory-mix"
+   687→                    value={[config.theoryPracticeMix]}
+   688→                    min={0}
+   689→                    max={100}
+   690→                    step={5}
+   691→                    onValueChange={(values) => updateConfig({ theoryPracticeMix: values[0] ?? 50 })}
+   692→                    aria-label="Équilibre théorie / pratique"
+   693→                  />
+   694→                  <p className="typo-meta">
+   695→                    0 % = uniquement de la pratique · 100 % = uniquement de la théorie.
+   696→                  </p>
+   697→                </div>
+   698→
+   699→                {/* Indices */}
+   700→                <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+   701→                  <div className="space-y-0.5">
+   702→                    <Label htmlFor="hints-enabled">Autoriser les indices</Label>
+   703→                    <p className="typo-meta">Propose des indices consultables pendant la session.</p>
+   704→                  </div>
+   705→                  <Switch
+   706→                    id="hints-enabled"
+   707→                    checked={config.hintsEnabled}
+   708→                    onCheckedChange={(v) => updateConfig({ hintsEnabled: v })}
+   709→                    aria-label="Autoriser les indices"
+   710→                  />
+   711→                </div>
+   712→
+   713→                <Separator />
+   714→
+   715→                {/* Soumission */}
+   716→                <div className="space-y-2">
+   717→                  {missingHint && (
+   718→                    <p className="typo-meta" role="status">
+   719→                      {missingHint}
+   720→                    </p>
+   721→                  )}
+   722→                  <Button type="submit" size="lg" className="w-full gap-2 font-semibold" disabled={!canSubmit}>
+   723→                    {generating ? (
+   724→                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+   725→                    ) : (
+   726→                      <Sparkles className="h-4 w-4" aria-hidden />
+   727→                    )}
+   728→                    {generating ? "Génération en cours… (IA, 30 à 90 s)" : "Générer et démarrer la session"}
+   729→                  </Button>
+   730→                  {generating && (
+   731→                    <Alert className="w-full">
+   732→                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+   733→                      <AlertTitle className="typo-subtitle">
+   734→                        L’IA analyse vos documents et rédige les exercices…
+   735→                      </AlertTitle>
+   736→                    </Alert>
+   737→                  )}
+   738→                </div>
+   739→              </form>
+   740→            </CardContent>
+   741→          </Card>
+   742→
+   743→          {/* 3. Exercices précédents */}
+   744→          <Card className="rounded-xl border bg-card">
+   745→            <CardHeader>
+   746→              <CardTitle className="typo-h3 flex items-center gap-2">
+   747→                <History className="h-4.5 w-4.5 text-muted-foreground" aria-hidden />
+   748→                Exercices précédents
+   749→              </CardTitle>
+   750→              <CardDescription className="typo-meta">Relancez une session générée précédemment.</CardDescription>
+   751→            </CardHeader>
+   752→            <CardContent>
+   753→              {history.length === 0 ? (
+   754→                <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+   755→                  <History className="h-6 w-6 text-muted-foreground" aria-hidden />
+   756→                  <p className="typo-h3">Aucun exercice</p>
+   757→                  <p className="typo-subtitle">Vos exercices générés apparaîtront ici.</p>
+   758→                </div>
+   759→              ) : (
+   760→                <ul
+   761→                  className="max-h-[32rem] space-y-3 overflow-y-auto pr-1"
+   762→                  aria-label="Exercices générés précédemment"
+   763→                >
+   764→                  {history.map((exercise) => (
+   765→                    <li key={exercise.id} className="space-y-2 rounded-lg border p-3">
+   766→                      <p className="truncate text-sm font-medium" title={exercise.title}>
+   767→                        {exercise.title}
+   768→                      </p>
+   769→                      <p className="typo-meta">
+   770→                        <span className="tnum">{exercise.questionCount}</span> question(s) ·{" "}
+   771→                        {formatDate(exercise.createdAt)}
+   772→                      </p>
+   773→                      <div className="flex items-center justify-between gap-2">
+   774→                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+   775→                          {exercise.subject && (
+   776→                            <span className="typo-meta flex min-w-0 items-center gap-1.5">
+   777→                              <span
+   778→                                className="h-2 w-2 shrink-0 rounded-full"
+   779→                                style={{ backgroundColor: exercise.subject.color }}
+   780→                                aria-hidden
+   781→                              />
+   782→                              <span className="truncate">{exercise.subject.name}</span>
+   783→                            </span>
+   784→                          )}
+   785→                          {exercise.config?.difficulty && (
+   786→                            <Badge variant="outline">{DIFFICULTY_LABELS[exercise.config.difficulty]}</Badge>
+   787→                          )}
+   788→                        </div>
+   789→                        <Button
+   790→                          type="button"
+   791→                          size="sm"
+   792→                          variant="outline"
+   793→                          className="shrink-0 gap-1.5"
+   794→                          disabled={startingId !== null}
+   795→                          onClick={() => startExercise(exercise.id, exercise.config?.mode ?? "apprentissage")}
+   796→                        >
+   797→                          {startingId === exercise.id ? (
+   798→                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+   799→                          ) : (
+   800→                            <Play className="h-3.5 w-3.5" aria-hidden />
+   801→                          )}
+   802→                          Démarrer
+   803→                        </Button>
+   804→                      </div>
+   805→                    </li>
+   806→                  ))}
+   807→                </ul>
+   808→              )}
+   809→            </CardContent>
+   810→          </Card>
+   811→        </div>
+   812→      ) : null}
+   813→    </section>
+   814→  );
+   815→}
+   816→
