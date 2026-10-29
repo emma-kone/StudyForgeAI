@@ -48,3 +48,4 @@ tool-results/
 upload/
 .agents/
 skills-lock.json
+node_modules

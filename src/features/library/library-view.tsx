@@ -13,6 +13,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { routes } from "@/config/routes";
 import { api } from "@/lib/client-api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -324,6 +326,7 @@ interface DocumentCardProps {
   onRetry: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (doc: ApiDocument) => void;
+  onReadInNotebook?: (doc: ApiDocument) => void;
 }
 
 function DocumentCard({
@@ -334,6 +337,7 @@ function DocumentCard({
   onRetry,
   onOpen,
   onDelete,
+  onReadInNotebook,
 }: DocumentCardProps) {
   const Icon = DOC_TYPE_ICONS[doc.type.toLowerCase()] ?? FileType;
   const status = statusMeta(doc.status);
@@ -407,6 +411,11 @@ function DocumentCard({
                 <Sparkles className="h-4 w-4" aria-hidden />
               )}
               {analyzing ? "Analyse…" : "Analyser (IA)"}
+            </Button>
+          )}
+          {doc.chapter && onReadInNotebook && (
+            <Button size="sm" variant="default" onClick={() => onReadInNotebook(doc)}>
+              <BookOpen className="h-4 w-4" aria-hidden /> Lire
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => onOpen(doc.id)}>
@@ -1606,6 +1615,7 @@ function ImportStepper({
 
 export default function LibraryView() {
   const { toast } = useToast();
+  const router = useRouter();
 
   // État persistant (conservé entre les changements de vue)
   const libraryMode = useAppStore((s) => s.libraryMode);
@@ -2251,6 +2261,16 @@ export default function LibraryView() {
                             </button>
                             <div className="flex shrink-0 items-center gap-1">
                               <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1.5 text-xs"
+                                onClick={(e) => { e.stopPropagation(); router.push(routes.chapterReader(chapter.id)); }}
+                                aria-label={`Lire ${chapter.name}`}
+                                disabled={chapter._count.documents === 0}
+                              >
+                                <BookOpen className="h-3.5 w-3.5" aria-hidden /> Lire
+                              </Button>
+                              <Button
                                 size="icon"
                                 variant="ghost"
                                 className="size-8"
@@ -2318,6 +2338,16 @@ export default function LibraryView() {
                   <p className="typo-meta tnum mt-1">{selectedChapter._count.documents} document(s)</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {chapterDocs.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="gap-1.5"
+                      onClick={() => router.push(routes.chapterReader(selectedChapter.id))}
+                    >
+                      <BookOpen className="h-4 w-4" aria-hidden /> Espace d'étude (Notebook)
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -2365,8 +2395,9 @@ export default function LibraryView() {
                       retrying={retryingId === doc.id}
                       onAnalyze={(id) => void analyzeDocument(id)}
                       onRetry={(id) => void retryDocument(id)}
-                      onOpen={setDetailsId}
+                      onOpen={(id) => router.push(routes.chapterReader(selectedChapter.id) + `?docId=${id}`)}
                       onDelete={setDeleteTarget}
+                      onReadInNotebook={(d) => router.push(routes.chapterReader(selectedChapter.id) + `?docId=${d.id}`)}
                     />
                   ))}
                 </div>

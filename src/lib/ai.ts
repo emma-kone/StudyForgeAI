@@ -84,7 +84,7 @@ async function callOpenRouter(
   const model = opts.model || process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
   const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const messages = [];
+  const messages: Array<{ role: string; content: string }> = [];
   if (systemPrompt.trim()) {
     messages.push({ role: "system", content: systemPrompt });
   }
