@@ -1,25 +1,27 @@
 import { db } from "@/lib/db";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Couche d'abstraction IA Hybride (Google Gemini + OpenRouter avec Fallback auto)
-// - Fournisseur principal par défaut : Google Gemini (gemini-3.8-flash, gratuit & performant)
-// - Fournisseur de secours : OpenRouter
-// - Bascule automatique transparente en cas de saturation / indisponibilité de l'un
+// Couche d'abstraction IA Hybride Multi-Fournisseurs
+// - Google Gemini (avec retry automatique sur saturation)
+// - Z-AI / Zhipu AI GLM (intégration directe avec clé dédiée)
+// - OpenRouter (secours et modèles complémentaires)
+// - Cascade automatique transparente en cas d'indisponibilité
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AiOp = "analysis" | "rag" | "generation" | "grading" | "explain" | "revision";
+export type AiProvider = "gemini" | "zai" | "openrouter";
 
 interface CompletionResult {
   ok: boolean;
   content: string;
   error?: string;
   model?: string;
-  provider?: "gemini" | "openrouter";
+  provider?: AiProvider;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-// ── Appel direct Google Gemini ───────────────────────────────────────────────
+// ── Appel direct Google Gemini (avec retry automatique sur pic de charge) ───
 async function callGemini(
   systemPrompt: string,
   userPrompt: string,
@@ -48,26 +50,58 @@ async function callGemini(
     };
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(bodyPayload),
-    signal: AbortSignal.timeout(timeout),
-  });
+  const maxRetries = 2;
+  let lastError = "";
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => null);
-    const msg = errData?.error?.message || `Erreur Gemini (${res.status} ${res.statusText})`;
-    return { ok: false, content: "", model, error: msg };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Pause avec backoff (1.5s, 3s)
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        console.warn(`[Gemini] Nouvelle tentative (${attempt}/${maxRetries}) suite à saturation...`);
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyPayload),
+        signal: AbortSignal.timeout(timeout),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        const msg = errData?.error?.message || `Erreur Gemini (${res.status} ${res.statusText})`;
+        lastError = msg;
+
+        // Si surcharge temporaire (503 / 429 / high demand), on retente
+        const isTemporary =
+          res.status === 429 ||
+          res.status === 503 ||
+          /demand|overloaded|unavailable|resource exhausted/i.test(msg);
+
+        if (isTemporary && attempt < maxRetries) {
+          continue;
+        }
+
+        return { ok: false, content: "", model, error: msg };
+      }
+
+      const data = await res.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (!content.trim()) {
+        return { ok: false, content: "", model, error: "Réponse vide de Gemini." };
+      }
+
+      return { ok: true, content, model };
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Erreur réseau inconnue";
+      if (attempt < maxRetries) {
+        continue;
+      }
+    }
   }
 
-  const data = await res.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  if (!content.trim()) {
-    return { ok: false, content: "", model, error: "Réponse vide de Gemini." };
-  }
-
-  return { ok: true, content, model };
+  return { ok: false, content: "", model, error: lastError || "Échec de l'appel Gemini" };
 }
 
 // ── Appel OpenRouter ─────────────────────────────────────────────────────────
@@ -90,38 +124,116 @@ async function callOpenRouter(
   }
   messages.push({ role: "user", content: userPrompt });
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey.trim()}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-      "X-Title": "StudyForge",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: opts.temperature ?? 0.3,
-    }),
-    signal: AbortSignal.timeout(timeout),
-  });
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey.trim()}`,
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "StudyForge",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: opts.temperature ?? 0.3,
+      }),
+      signal: AbortSignal.timeout(timeout),
+    });
 
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => null);
-    const errMsg = errBody?.error?.message || `Erreur OpenRouter (${res.status} ${res.statusText})`;
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      const errMsg = errBody?.error?.message || `Erreur OpenRouter (${res.status} ${res.statusText})`;
+      return { ok: false, content: "", model, error: errMsg };
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content ?? "";
+    if (!content.trim()) {
+      return { ok: false, content: "", model, error: "Réponse vide d'OpenRouter." };
+    }
+
+    return { ok: true, content, model: data.model || model };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : "Erreur de connexion OpenRouter";
     return { ok: false, content: "", model, error: errMsg };
   }
-
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content ?? "";
-  if (!content.trim()) {
-    return { ok: false, content: "", model, error: "Réponse vide d'OpenRouter." };
-  }
-
-  return { ok: true, content, model: data.model || model };
 }
 
-// ── Orchestrateur avec Fallback automatique ──────────────────────────────────
+// ── Appel Z-AI / Zhipu AI GLM ──────────────────────────────────────────────
+async function callZAI(
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { model?: string; timeoutMs?: number; temperature?: number } = {}
+): Promise<{ ok: boolean; content: string; model: string; error?: string }> {
+  const apiKey =
+    process.env.ZAI_API_KEY || "866a41db3a394a8dbd6c367df5152010.h8lgQKAM4HmwsEli";
+  const baseUrl = (process.env.ZAI_BASE_URL || "https://open.bigmodel.cn/api/paas/v4").replace(
+    /\/+$/,
+    ""
+  );
+  const model = opts.model || process.env.ZAI_MODEL || "glm-4-flash";
+  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const messages: Array<{ role: string; content: string }> = [];
+  if (systemPrompt.trim()) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: userPrompt });
+
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey.trim()}`,
+        "X-Z-AI-From": "Z",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: opts.temperature ?? 0.3,
+        thinking: { type: "disabled" },
+      }),
+      signal: AbortSignal.timeout(timeout),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      const errMsg = errBody?.error?.message || `Erreur Z-AI (${res.status} ${res.statusText})`;
+      return { ok: false, content: "", model, error: errMsg };
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content ?? "";
+    if (!content.trim()) {
+      return { ok: false, content: "", model, error: "Réponse vide de Z-AI." };
+    }
+
+    return { ok: true, content, model: data.model || model };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : "Erreur de connexion Z-AI";
+    return { ok: false, content: "", model, error: errMsg };
+  }
+}
+
+async function invokeProvider(
+  provider: AiProvider,
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { model?: string; timeoutMs?: number; temperature?: number; json?: boolean } = {}
+): Promise<{ ok: boolean; content: string; model: string; error?: string }> {
+  switch (provider) {
+    case "gemini":
+      return callGemini(systemPrompt, userPrompt, opts);
+    case "zai":
+      return callZAI(systemPrompt, userPrompt, opts);
+    case "openrouter":
+      return callOpenRouter(systemPrompt, userPrompt, opts);
+  }
+}
+
+// ── Orchestrateur avec Cascade automatique Multi-Fournisseurs ────────────────
 async function callModel(
   op: AiOp,
   systemPrompt: string,
@@ -131,70 +243,62 @@ async function callModel(
   const started = Date.now();
   const promptChars = systemPrompt.length + userPrompt.length;
 
-  const preferredProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const preferred = (process.env.AI_PROVIDER || "gemini").toLowerCase() as AiProvider;
   const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+  const hasZai = Boolean(process.env.ZAI_API_KEY || "866a41db3a394a8dbd6c367df5152010.h8lgQKAM4HmwsEli");
   const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY);
 
-  let primary: "gemini" | "openrouter" = "gemini";
-  let fallback: "gemini" | "openrouter" | null = null;
+  // Construction de la chaîne de cascade selon les priorités et clés disponibles
+  const allProviders: AiProvider[] = ["gemini", "zai", "openrouter"];
+  const isAvailable = (p: AiProvider) => {
+    if (p === "gemini") return hasGemini;
+    if (p === "zai") return hasZai;
+    if (p === "openrouter") return hasOpenRouter;
+    return false;
+  };
 
-  if (preferredProvider === "openrouter" && hasOpenRouter) {
-    primary = "openrouter";
-    fallback = hasGemini ? "gemini" : null;
-  } else if (hasGemini) {
-    primary = "gemini";
-    fallback = hasOpenRouter ? "openrouter" : null;
-  } else if (hasOpenRouter) {
-    primary = "openrouter";
-    fallback = null;
-  } else {
-    const err = "Aucune clé d'API configurée (définissez GEMINI_API_KEY ou OPENROUTER_API_KEY).";
+  const candidateChain: AiProvider[] = [
+    preferred,
+    ...allProviders.filter((p) => p !== preferred),
+  ].filter(isAvailable);
+
+  if (candidateChain.length === 0) {
+    const err = "Aucune clé d'API configurée (définissez GEMINI_API_KEY, ZAI_API_KEY ou OPENROUTER_API_KEY).";
     await log(op, opts.userId, "none", promptChars, 0, false, err, Date.now() - started);
     return { ok: false, content: "", error: err };
   }
 
-  // 1. Essai avec le fournisseur principal
-  const primaryResult =
-    primary === "gemini"
-      ? await callGemini(systemPrompt, userPrompt, opts)
-      : await callOpenRouter(systemPrompt, userPrompt, opts);
+  const failedAttempts: string[] = [];
 
-  if (primaryResult.ok) {
-    await log(op, opts.userId, `${primary}:${primaryResult.model}`, promptChars, primaryResult.content.length, true, undefined, Date.now() - started);
-    return { ok: true, content: primaryResult.content, model: primaryResult.model, provider: primary };
-  }
+  for (let i = 0; i < candidateChain.length; i++) {
+    const provider = candidateChain[i];
+    if (i > 0) {
+      console.warn(`[AI] Bascule automatique vers le secours (${provider})...`);
+    }
 
-  console.warn(`[AI] Le fournisseur principal (${primary}) a échoué: ${primaryResult.error}`);
+    const res = await invokeProvider(provider, systemPrompt, userPrompt, opts);
 
-  // 2. Si échec et qu'un fournisseur de secours est disponible, fallback automatique
-  if (fallback) {
-    console.warn(`[AI] Bascule automatique vers le secours (${fallback})...`);
-    const fallbackResult =
-      fallback === "gemini"
-        ? await callGemini(systemPrompt, userPrompt, opts)
-        : await callOpenRouter(systemPrompt, userPrompt, opts);
-
-    if (fallbackResult.ok) {
+    if (res.ok) {
       await log(
         op,
         opts.userId,
-        `${fallback}:${fallbackResult.model}`,
+        `${provider}:${res.model}`,
         promptChars,
-        fallbackResult.content.length,
+        res.content.length,
         true,
         undefined,
         Date.now() - started
       );
-      return { ok: true, content: fallbackResult.content, model: fallbackResult.model, provider: fallback };
+      return { ok: true, content: res.content, model: res.model, provider };
     }
 
-    const combinedError = `Échec de ${primary} (${primaryResult.error}) et du secours ${fallback} (${fallbackResult.error})`;
-    await log(op, opts.userId, "fallback-failed", promptChars, 0, false, combinedError, Date.now() - started);
-    return { ok: false, content: "", error: combinedError };
+    console.warn(`[AI] Le fournisseur (${provider}) a échoué: ${res.error}`);
+    failedAttempts.push(`${provider} (${res.error})`);
   }
 
-  await log(op, opts.userId, `${primary}:${primaryResult.model}`, promptChars, 0, false, primaryResult.error, Date.now() - started);
-  return { ok: false, content: "", error: primaryResult.error };
+  const combinedError = `Échec de tous les fournisseurs : ${failedAttempts.join(" | ")}`;
+  await log(op, opts.userId, "cascade-failed", promptChars, 0, false, combinedError, Date.now() - started);
+  return { ok: false, content: "", error: combinedError };
 }
 
 async function log(

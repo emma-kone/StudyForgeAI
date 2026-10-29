@@ -2,17 +2,12 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, readJson, ApiHttpError } from "@/lib/api-helpers";
+import { normalizeSubjectName } from "@/lib/subjects";
 
 const subjectSchema = z.object({
   name: z.string().min(1, "Nom requis").max(120),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Couleur hex invalide").optional(),
 });
-
-/** Normalisation raisonnable pour la détection de doublons :
- *  trim, espaces réduits, casse ignorée (les accents restent significatifs). */
-export function normalizeSubjectName(raw: string): string {
-  return raw.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 export async function GET() {
   return handle(async () => {

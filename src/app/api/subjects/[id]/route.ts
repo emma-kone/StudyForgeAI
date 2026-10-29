@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, readJson, ApiHttpError } from "@/lib/api-helpers";
-import { normalizeSubjectName } from "../route";
+import { normalizeSubjectName } from "@/lib/subjects";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
