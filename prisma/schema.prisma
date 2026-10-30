@@ -35,7 +35,7 @@ model UserSettings {
   defaultMode    String  @default("apprentissage")
   maxUploadMB    Int     @default(20)
   hintsEnabled   Boolean @default(true)
-  aiModel        String  @default("glm-4.6")
+  aiModel        String  @default("gemini-3.8-flash")
   exerciseLang   String  @default("fr")
   retentionDays  Int     @default(0) // 0 = conservation illimitée
 

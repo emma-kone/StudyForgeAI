@@ -41,11 +41,5 @@ yarn-error.log*
 .vercel
 
 # IDE / tools
-.claude
-.z-ai-config
 local-*
-tool-results/
-upload/
-.agents/
-skills-lock.json
 node_modules

@@ -1,15 +1,14 @@
 import { db } from "@/lib/db";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Couche d'abstraction IA Hybride Multi-Fournisseurs
-// - Google Gemini (avec retry automatique sur saturation)
-// - Z-AI / Zhipu AI GLM (intégration directe avec clé dédiée)
+// Couche d'abstraction IA Hybride (Google Gemini + OpenRouter avec Fallback auto)
+// - Google Gemini (fournisseur principal avec retry automatique sur saturation)
 // - OpenRouter (secours et modèles complémentaires)
-// - Cascade automatique transparente en cas d'indisponibilité
+// - Bascule automatique transparente en cas d'indisponibilité
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AiOp = "analysis" | "rag" | "generation" | "grading" | "explain" | "revision";
-export type AiProvider = "gemini" | "zai" | "openrouter";
+export type AiProvider = "gemini" | "openrouter";
 
 interface CompletionResult {
   ok: boolean;
@@ -160,63 +159,6 @@ async function callOpenRouter(
   }
 }
 
-// ── Appel Z-AI / Zhipu AI GLM ──────────────────────────────────────────────
-async function callZAI(
-  systemPrompt: string,
-  userPrompt: string,
-  opts: { model?: string; timeoutMs?: number; temperature?: number } = {}
-): Promise<{ ok: boolean; content: string; model: string; error?: string }> {
-  const apiKey =
-    process.env.ZAI_API_KEY || "866a41db3a394a8dbd6c367df5152010.h8lgQKAM4HmwsEli";
-  const baseUrl = (process.env.ZAI_BASE_URL || "https://open.bigmodel.cn/api/paas/v4").replace(
-    /\/+$/,
-    ""
-  );
-  const model = opts.model || process.env.ZAI_MODEL || "glm-4-flash";
-  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-
-  const messages: Array<{ role: string; content: string }> = [];
-  if (systemPrompt.trim()) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  messages.push({ role: "user", content: userPrompt });
-
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey.trim()}`,
-        "X-Z-AI-From": "Z",
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.3,
-        thinking: { type: "disabled" },
-      }),
-      signal: AbortSignal.timeout(timeout),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => null);
-      const errMsg = errBody?.error?.message || `Erreur Z-AI (${res.status} ${res.statusText})`;
-      return { ok: false, content: "", model, error: errMsg };
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) {
-      return { ok: false, content: "", model, error: "Réponse vide de Z-AI." };
-    }
-
-    return { ok: true, content, model: data.model || model };
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : "Erreur de connexion Z-AI";
-    return { ok: false, content: "", model, error: errMsg };
-  }
-}
-
 async function invokeProvider(
   provider: AiProvider,
   systemPrompt: string,
@@ -226,14 +168,12 @@ async function invokeProvider(
   switch (provider) {
     case "gemini":
       return callGemini(systemPrompt, userPrompt, opts);
-    case "zai":
-      return callZAI(systemPrompt, userPrompt, opts);
     case "openrouter":
       return callOpenRouter(systemPrompt, userPrompt, opts);
   }
 }
 
-// ── Orchestrateur avec Cascade automatique Multi-Fournisseurs ────────────────
+// ── Orchestrateur avec Bascule automatique (Gemini ↔ OpenRouter) ─────────────
 async function callModel(
   op: AiOp,
   systemPrompt: string,
@@ -245,14 +185,11 @@ async function callModel(
 
   const preferred = (process.env.AI_PROVIDER || "gemini").toLowerCase() as AiProvider;
   const hasGemini = Boolean(process.env.GEMINI_API_KEY);
-  const hasZai = Boolean(process.env.ZAI_API_KEY || "866a41db3a394a8dbd6c367df5152010.h8lgQKAM4HmwsEli");
   const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY);
 
-  // Construction de la chaîne de cascade selon les priorités et clés disponibles
-  const allProviders: AiProvider[] = ["gemini", "zai", "openrouter"];
+  const allProviders: AiProvider[] = ["gemini", "openrouter"];
   const isAvailable = (p: AiProvider) => {
     if (p === "gemini") return hasGemini;
-    if (p === "zai") return hasZai;
     if (p === "openrouter") return hasOpenRouter;
     return false;
   };
@@ -263,7 +200,7 @@ async function callModel(
   ].filter(isAvailable);
 
   if (candidateChain.length === 0) {
-    const err = "Aucune clé d'API configurée (définissez GEMINI_API_KEY, ZAI_API_KEY ou OPENROUTER_API_KEY).";
+    const err = "Aucune clé d'API configurée (définissez GEMINI_API_KEY ou OPENROUTER_API_KEY).";
     await log(op, opts.userId, "none", promptChars, 0, false, err, Date.now() - started);
     return { ok: false, content: "", error: err };
   }
